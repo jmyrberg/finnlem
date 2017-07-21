@@ -5,9 +5,9 @@ Created on 12.7.2017
 @author: Jesse
 '''
 import numpy as np
-from utils import save_obj,load_obj
+from utils import save_obj,load_obj,create_folder
 from collections import defaultdict, Counter
-from model_processing import Preprocessor
+from clicksaver_preprocessing import Preprocessor
 
 class Dictionary(object):
     
@@ -26,17 +26,13 @@ class Dictionary(object):
     special_tokens = ['<SOS>','<PAD>','<EOS>','<UNK>']
     path = None
     
-    def __init__(self, 
-                 preprocessor=Preprocessor(),
+    def __init__(self,
                  vocab_size=100000,
                  min_freq=0.1,
-                 max_freq=1.0,
-                 prune_every_n=5000):
-        self.preprocessor = preprocessor
+                 max_freq=1.0):
         self.vocab_size = vocab_size
         self.min_freq = min_freq
         self.max_freq = max_freq
-        self.prune_every_n = prune_every_n
         
         self._init_dicts()
         
@@ -103,8 +99,8 @@ class Dictionary(object):
         self.token2id = token2id
         self._init_dicts(already_init=True)
         
-    def fit_batch(self,docs,verbose=True):
-        for doc in self.preprocessor.process_docs(docs):
+    def fit_batch(self,docs,prune_every_n=None):
+        for doc in docs:
             self.n_docs += 1
             for token in doc:
                 if token not in self.token2id:
@@ -113,13 +109,14 @@ class Dictionary(object):
                     self.n_tokens += 1
                 self.counter[token] += 1
                 
-            if self.n_docs % self.prune_every_n == 0:
-                self._keep_n(reset_counter=False)
-                self._compactify()
-                
-        if verbose:
-            print('Dictionary fitted with %d documents (%d tokens)' % \
-                  (self.n_docs,self.n_tokens))
+            if prune_every_n is not None:
+                if self.n_docs % prune_every_n == 0:
+                    self._keep_n(reset_counter=False)
+                    self._compactify()
+        
+    def fit(self,docs):
+        self.fit_batch(docs)
+        self.lock()
         
     def lock(self):
         self._remove_extremes()
@@ -127,8 +124,7 @@ class Dictionary(object):
         self._compactify()
         self.locked = True
         print('Dictionary fitted with %d documents (%d tokens)' % \
-                  (self.n_docs,self.n_tokens))
-        print('Dictionary locked!')
+              (self.n_docs,self.n_tokens))
         
     def seq2doc(self,seq):
         doc = [self.id2token[i] for i in seq]
@@ -139,7 +135,6 @@ class Dictionary(object):
             yield self.seq2doc(seq)
     
     def doc2seq(self,doc,prepend_SOS=False,append_EOS=False):
-        doc = self.preprocessor.process_doc(doc)
         cnt = 0
         seq = np.zeros(len(doc)+prepend_SOS+append_EOS,dtype=np.int32)
         if prepend_SOS:
@@ -159,8 +154,8 @@ class Dictionary(object):
     
     def save(self,save_path):
         if self.locked:
-            save_obj(self,save_path)
-            save_obj(self.counter,save_path+'.counter')
+            save_obj(self,save_path,force=True)
+            save_obj(self.counter,save_path+'.counter',force=True)
             self.path = save_path
         
     def load(self,load_path):

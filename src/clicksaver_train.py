@@ -8,7 +8,7 @@ import math
 import tensorflow as tf
 from data_utils import BatchGenerator
 from dictionary import Dictionary
-from models import Seq2SeqModel
+from models import Seq2Seq
 from utils import list_files_in_folder
 
 def get_model_config(d):

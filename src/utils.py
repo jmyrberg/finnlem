@@ -9,10 +9,13 @@ import datetime
 from os.path import isfile,exists,join,dirname,abspath
 from os import listdir,makedirs,walk
 
-def save_obj(obj,filename):
-    with open(filename, 'wb') as f:
-        pickle.dump(obj, f, pickle.HIGHEST_PROTOCOL)
-    print('Saved successfully in %s!' % filename)
+def save_obj(obj,filepath,force=False):
+    if force:
+        folder = dirname(filepath)
+        create_folder(folder)
+    with open(filepath, 'wb') as f:
+            pickle.dump(obj, f, pickle.HIGHEST_PROTOCOL)
+    print('Saved successfully in %s!' % filepath)
         
 def load_obj(filename):
     with open(filename, 'rb') as f:
@@ -40,3 +43,8 @@ def list_files_in_folder(folder):
         for name in files:
             files_list.append(join(path, name))
     return(files_list)
+
+def update_dict(original,replacer):
+    for k,v in replacer.items():
+        original[k] = v
+    return(original)

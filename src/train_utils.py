@@ -5,12 +5,12 @@ Created on 14.7.2017
 @author: Jesse
 '''
 import logging
+import json
 import tensorflow as tf
 from dictionary import Dictionary
-from models import Seq2SeqModel
-from utils import create_folder, list_files_in_folder
+from models import Seq2Seq
+from utils import create_folder, update_dict, list_files_in_folder
 from os.path import exists,join
-from model_train import get_model_config,get_model_config2
 from data_utils import BatchGenerator
 
 class TrainController():
@@ -18,10 +18,12 @@ class TrainController():
     def __init__(self,
                  controller_name='TestModel',
                  base_dir='./training/',
-                 dict_path='./data/dictionary.dict'):
+                 dict_path='./data/dictionary2.dict',
+                 model_config={}):
         self.controller_name = controller_name
         self.base_dir = base_dir
         self.dict_path = dict_path
+        self.model_config = model_config
         
         self._init_controller()
         
@@ -37,6 +39,7 @@ class TrainController():
         # Paths and folders
         self.model_dir = join(self.controller_dir,'model')
         self.model_path = join(self.model_dir,self.controller_name)+'.model'
+        self.model_config_path = join(self.model_dir,self.controller_name)+'.config'
         self.to_train_files_path = join(self.controller_dir,'to_train.files')
         self.trained_files_path = join(self.controller_dir,'trained.files')
         self.log_path = join(self.controller_dir,self.controller_name)+'.log'
@@ -52,6 +55,7 @@ class TrainController():
         
         # Create empty files
         for filename in [self.meta_path,
+                         self.model_config_path,
                          self.to_train_files_path,
                          self.trained_files_path]:
             try:
@@ -62,10 +66,14 @@ class TrainController():
                                  'since it already exists',filename)
                 pass
             
+        # Write given model config to file
+        self._write_model_config_file()
+            
     def _init_existing_controller(self):
         self._read_meta_file()
         self._init_logger()
         self._read_train_files()
+        self._read_model_config()
         self._load_dictionary()
             
     def _init_logger(self):
@@ -97,6 +105,17 @@ class TrainController():
         with open(self.to_train_files_path,'w',encoding='utf8') as f:
             f.writelines('{}\n'.format(fname) for fname in self.to_train_files)
 
+    def _write_model_config_file(self):
+        try:
+            print(self.model_config)
+            with open(self.model_config_path,'w') as f:
+                f.write(json.dumps(self.model_config, indent=4))
+            self.logger.info('Model config file "%s" written successfully',
+                             self.model_config_path)
+        except:
+            self.logger.warn('Could not write model config to file "%s"',
+                             self.model_config_path)
+    
     ########################## SAVE DATA ##########################
     def _save_train_status(self):
         try:
@@ -133,6 +152,16 @@ class TrainController():
             self.trained_files = f.read().splitlines()
         self.logger.info('Training files "%s" and "%s" loaded successfully',
                          self.to_train_files_path,self.trained_files_path)
+        
+    def _read_model_config(self):
+        try:
+            with open(self.model_config_path,'r') as f:
+                self.model_config = json.loads(f.read())
+            self.logger.info('Model config loaded successfully')
+        except Exception as e:
+            self.logger.error('Could not load model config')
+            self.logger.exception(e)
+            pass
     
     ########################## LOAD DATA ##########################
     def _load_dictionary(self):
@@ -142,7 +171,7 @@ class TrainController():
             self.logger.info('Dictionary load successfully from "%s"',
                              self.dict_path)
         except:
-            self.logger.log('Failed loading dictionary at "%s"',
+            self.logger.log('Failed loading dictionary2 at "%s"',
                             self.dict_path)
             pass
     
@@ -170,16 +199,6 @@ class TrainController():
                              'checkpoint from "%s"',self.model_dir+'/')
             pass
 
-    def _load_model_config(self,mode):
-        try:
-            self.model_config = get_model_config2(self.dictionary)
-            self.model_config['mode'] = mode
-            self.logger.info('Model config loaded successfully')
-        except Exception as e:
-            self.logger.error('Could not load model config')
-            self.logger.exception(e)
-            pass
-
     def _load_existing_model(self):
         try:
             self._load_last_model_checkpoint()
@@ -189,7 +208,7 @@ class TrainController():
             self.logger.warn('Existing model could not be loaded')
             pass
         
-    def _load_model(self,mode='train'):
+    def _load_model(self,mode,params):
         try:
             if hasattr(self,'model'):
                 self.sess.close()
@@ -197,7 +216,10 @@ class TrainController():
                 del self.model
                 del self.model_config
                 del self.saver
-            self._load_model_config(mode=mode)
+            self._read_model_config()
+            print(self.model_config)
+            self._temp_update_model_config(mode,params)
+            print(self.model_config)
             self._create_seq2seq_model()
             self._create_training_session()
             self.sess.run(tf.global_variables_initializer())
@@ -215,7 +237,7 @@ class TrainController():
         
     def _create_seq2seq_model(self):
         try:
-            self.model = Seq2SeqModel(config=self.model_config)
+            self.model = Seq2Seq(**self.model_config)
             self.logger.info('Seq2SeqModel created successfully')
         except Exception as e:
             self.logger.error('Could not create Seq2SeqModel')
@@ -227,6 +249,24 @@ class TrainController():
         return(True)
 
     ########################## GENERIC HELPERS ##########################
+    def _add_dictionary_to_model_config(self):
+        self.model_config['num_encoder_symbols'] = self.dictionary.n_tokens
+        self.model_config['num_decoder_symbols'] = self.dictionary.n_tokens
+        self.model_config['start_token'] = self.dictionary.EOS
+        self.model_config['end_token'] = self.dictionary.EOS
+        self.model_config['pad_token'] = self.dictionary.PAD
+        
+    def _temp_update_model_config(self,mode,params):
+        try:
+            self._add_dictionary_to_model_config()
+            # @ TODO: Check that we dont overwrite originals
+            params['mode'] = mode
+            self.model_config = update_dict(self.model_config, params)
+            self.logger.info('Model config temporarily updated:\n%s',
+                             self.model_config)
+        except:
+            self.logger.error('Model config could not be updated')
+    
     def _get_meta_dict(self):
         return({
             'controller_dir':self.controller_dir,
@@ -234,6 +274,7 @@ class TrainController():
             'dict_path':self.dict_path,
             'model_path':self.model_path,
             'meta_path':self.meta_path,
+            'model_config_path':self.model_config_path,
             'to_train_files_path':self.to_train_files_path,
             'trained_files_path':self.trained_files_path,
             'log_path':self.log_path})
@@ -248,14 +289,14 @@ class TrainController():
     ################### USER-FACING FUNCTIONS ####################
     
     #### TRAINING ####
-    def train(self, 
-              batch_size=32, 
-              max_seq_len=6000, 
-              file_batch_size=1024*8, 
-              save_every_n_batch=1000):
+    def train(self, batch_size=32, max_seq_len=6000, 
+              file_batch_size=1024*8, save_every_n_batch=1000,
+              opt_params={}):
         if self._check_train_validity():
             self.logger.info('Starting to train...')
-            self._load_model(mode='train')
+            
+            self._load_model(mode='train',params=opt_params)
+            
             n_trained_files = len(self.trained_files)
             bg = BatchGenerator(self.dictionary).train_from_files(
                 batch_size=batch_size,
@@ -264,17 +305,14 @@ class TrainController():
                 files=self.to_train_files,
                 output_list=self.trained_files)
             
-            for batch_nb,(input_batch,input_batch_lens,target_batch,target_batch_lens) in enumerate(bg):
-#                 print(input_batch[-1])
-#                 print(input_batch_lens[-1])
-#                 print(target_batch[-1])
-#                 print(target_batch_lens[-1])
-                loss,_ = self.model.train(self.sess,input_batch,input_batch_lens,target_batch,target_batch_lens)
+            for batch_nb,(input_batch,input_batch_lens,
+                          target_batch,target_batch_lens) in enumerate(bg):
+                loss,_ = self.model.train(self.sess,
+                                          input_batch,input_batch_lens,
+                                          target_batch,target_batch_lens)
                 n_trained_files_new = len(self.trained_files)
                 print('%d files trained | Current batch %d (size %d) with loss of %f' % \
                       (n_trained_files_new,batch_nb,len(input_batch),loss))
-                
-                #print(self.model.eval(self.sess,input_batch,input_batch_lens,target_batch,target_batch_lens))
                 
                 if n_trained_files_new > n_trained_files:
                     self.logger.info('File "%s" trained successfully, model loss: %f',
