@@ -5,21 +5,21 @@ Created on 19.7.2017
 @author: Jesse
 '''
 import os
-import string
 from dictionary import Dictionary
 from train_utils import TrainController
-from models import Seq2Seq
-from utils import list_files_in_folder
+from lemmatizer_preprocessing import generate_train_batches, \
+                                generate_decode_batches
+
+mode = 'decode'
 
 # Dictionary
-dict_train = False
-dict_vocab = [list(string.ascii_lowercase) + ['ä','ö']]
+dict_train = True
+dict_vocab_path = './data/lemmatizer/dicts/dictionary.vocab'
 dict_path = './data/lemmatizer/dicts/dictionary.dict'
 
 # Lemmatizer
-lemmatizer_name = 'TestLemmatizer'
-lemmatizer_dir = './data/lemmatizer/training/'
-lemmatizer_train = True
+lemmatizer_name = 'TestLemmatizer2'
+lemmatizer_dir = './data/lemmatizer/controllers/'
 
 # Model config
 mc = {}
@@ -30,98 +30,67 @@ mc['embedding_dim'] = 128
 mc['depth'] = 2
 
 mc['attn_type'] = 'bahdanau'
-mc['attn_input_feeding'] = False
+mc['attn_input_feeding'] = True
 mc['use_residual'] = True
 
-mc['dropout_rate'] = 0.0
+mc['dropout_rate'] = 0.3
 
 mc['beam_width'] = 2
 
+# Train
+train_batch_size = 64
+train_file_batch_size = 2500000
+opt_params = {}
+opt_params['learning_rate'] = 0.0001
 
-def train_dict():
+# Decode
+decode_batch_size = 64
+
+def dictionary():
+    with open(dict_vocab_path,'r',encoding='utf8') as f:
+        dict_vocab = f.read().splitlines()
+        print(dict_vocab)
     if not os.path.exists(dict_path) or dict_train:
         d = Dictionary()
-        d.fit(dict_vocab)
+        d.fit([dict_vocab])
         d.save(dict_path)
     elif os.path.exists(dict_path):
         pass
     else:
         raise FileNotFoundError("Dictionary doesn't exist!")
-
-def train_model():
+            
+def train():
     tc = TrainController(controller_name=lemmatizer_name,
                          base_dir=lemmatizer_dir,
                          dict_path=dict_path,
                          model_config=mc)
-    tc.add_train_files(list_files_in_folder('./data/feed/processed'))
-    tc.train(opt_params={'learning_rate':0.002})
+    if len(tc.to_train_files) < 1:
+        tc.add_train_files(['D:/Koodaus/EclipseWS/ClickSaver/src/data/lemmatizer/train_data/all_lemmatizer.csv']*10, allow_copies=True)
+    train_generator = generate_train_batches(filenames=tc.to_train_files,
+                                             file_batch_size=train_file_batch_size,
+                                             batch_size=train_batch_size,
+                                             dictionary=tc.dictionary)
+    tc.train(train_generator,opt_params=opt_params)
+    
+def decode():
+    tc = TrainController(controller_name=lemmatizer_name,
+                         base_dir=lemmatizer_dir,
+                         dict_path=dict_path,
+                         model_config=mc)
+    decode_generator = generate_decode_batches(filenames=['./data/morph/in/examples.csv'],
+                                               batch_size=decode_batch_size,
+                                               dictionary=tc.dictionary)
+    tc.decode(decode_generator)
 
-def train_lemmatizer():
-    train_dict()
-    train_model()
 
 def main():
-    train_lemmatizer()
+    if mode == 'dictionary':
+        dictionary()
+    elif mode == 'train':
+        train()
+    elif mode == 'decode':
+        decode()
+    
     
 if __name__ == '__main__':
     main()
-
-
-
-# class Preprocessor():
-#     
-#     def process_doc(self,doc):
-#         doc = list(doc)
-#         return(doc)
-#         
-#     def process_docs(self,docs):
-#         for doc in docs:
-#             yield self.process_doc(doc)
-# 
-# 
-# name = 'Morphology'
-# fname = './data/morph/in/morph.csv'
-# dict_path = './data/morph.dict'
-# run = False
-# train = False
-# 
-# # Fit dictionary2
-# if run:
-#     docs = pd.read_csv(fname,encoding='utf8')
-#     d = Dictionary(preprocessor=Preprocessor(), 
-#                 vocab_size=100000, 
-#                 min_freq=0.0, 
-#                 max_freq=1.0, 
-#                 prune_every_n=5000)
-#     d.fit_batch(docs.input.values)
-#     d.fit_batch(docs.target.values)
-#     d.lock()
-#     d.save(dict_path)
-# 
-# # TrainController
-# tc = TrainController(name, dict_path=dict_path)
-# 
-# if train:
-#     # Train
-#     if len(tc.to_train_files) < 1:
-#         print('Adding train files')
-#         tc.add_train_files([fname]*100, allow_copies=True)
-#     tc.train(batch_size=32, max_seq_len=1000, 
-#              file_batch_size=2000000, save_every_n_batch=50)
-# elif not train:
-#     # Predict
-#     #docs = pd.read_csv(fname,encoding='utf8',nrows=50)
-#     tc.predict([
-#         
-#         'koira','koiran','koiraa',
-#         'koirana','koiraksi','koirassa','koirasta','koiraan',
-#         
-#         'kissa','kissan','kissaa',
-#         'kissana','kissaksi','kissassa','kissasta','kissaan',
-#         
-#         'gepardi','gepardin','gepardia','gepardina','gepardiksi',
-#         'gepardistaansakohaan',
-#         
-#         'infrastruktuuritukeansakin'
-#         
-#         ], batch_size=1)

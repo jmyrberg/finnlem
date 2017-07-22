@@ -90,7 +90,7 @@ class Seq2Seq(object):
         self._build_decoder()
 
     def _init_attributes(self):
-        self.use_beamsearch_decode = self.beam_width > 1
+        self.use_beamsearch_decode = self.beam_width > 1 and self.mode == 'decode'
         self.use_dropout = True if self.dropout_rate == 0.0 else False
         self.keep_prob = 1.0 - self.dropout_rate        
 
@@ -199,6 +199,11 @@ class Seq2Seq(object):
                 time_major=False, swap_memory=True)
 
     def _build_decoder_cell(self):
+        
+        encoder_outputs = self.encoder_outputs
+        encoder_last_state = self.encoder_last_state
+        encoder_inputs_length = self.encoder_inputs_length
+        
         # To use BeamSearchDecoder, encoder_outputs, encoder_last_state, encoder_inputs_length 
         # needs to be tiled so that: [batch_size, .., ..] -> [batch_size x beam_width, .., ..]
         if self.use_beamsearch_decode:
@@ -254,6 +259,7 @@ class Seq2Seq(object):
         # should be ${decoder_beam_width} times to the origianl batch_size
         batch_size = self.batch_size if not self.use_beamsearch_decode \
                      else self.batch_size * self.beam_width
+                         
         initial_state = [state for state in encoder_last_state]
 
         initial_state[-1] = self.decoder_cell_list[-1].zero_state(
@@ -388,7 +394,7 @@ class Seq2Seq(object):
                  self.decoder_outputs_length_decode) = (seq2seq.dynamic_decode(
                     decoder=inference_decoder,
                     output_time_major=False,
-                    impute_finished=True,    # error occurs
+                    #impute_finished=True,    # error occurs
                     maximum_iterations=self.max_decode_step))
 
                 if not self.use_beamsearch_decode:
@@ -458,7 +464,7 @@ class Seq2Seq(object):
         if self.mode != 'train':
             raise ValueError("Train step can only be operated in train mode")
 
-        input_feed = self.check_feeds(encoder_inputs, encoder_inputs_length,
+        input_feed = self._check_feeds(encoder_inputs, encoder_inputs_length,
                                       decoder_inputs, decoder_inputs_length, 
                                       decode=False)
         # Input feeds for dropout
@@ -480,9 +486,8 @@ class Seq2Seq(object):
         outputs = sess.run(output_feed, input_feed)
         return outputs[0], outputs[1]    # loss
 
-    def predict(self, sess, encoder_inputs, encoder_inputs_length,
-                max_decode_step=30, beam_width=1):
-        input_feed = self.check_feeds(encoder_inputs, encoder_inputs_length, 
+    def predict(self, sess, encoder_inputs, encoder_inputs_length):
+        input_feed = self._check_feeds(encoder_inputs, encoder_inputs_length, 
                                       decoder_inputs=None, decoder_inputs_length=None, 
                                       decode=True)
         # Input feeds for dropout

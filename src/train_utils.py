@@ -9,7 +9,7 @@ import json
 import tensorflow as tf
 from dictionary import Dictionary
 from models import Seq2Seq
-from utils import create_folder, update_dict, list_files_in_folder
+from utils import create_folder, update_dict
 from os.path import exists,join
 from data_utils import BatchGenerator
 
@@ -217,9 +217,7 @@ class TrainController():
                 del self.model_config
                 del self.saver
             self._read_model_config()
-            print(self.model_config)
             self._temp_update_model_config(mode,params)
-            print(self.model_config)
             self._create_seq2seq_model()
             self._create_training_session()
             self.sess.run(tf.global_variables_initializer())
@@ -289,25 +287,18 @@ class TrainController():
     ################### USER-FACING FUNCTIONS ####################
     
     #### TRAINING ####
-    def train(self, batch_size=32, max_seq_len=6000, 
-              file_batch_size=1024*8, save_every_n_batch=1000,
+    def train(self, train_generator, 
+              save_every_n_batch=100,
               opt_params={}):
         if self._check_train_validity():
             self.logger.info('Starting to train...')
             
             self._load_model(mode='train',params=opt_params)
-            
+    
             n_trained_files = len(self.trained_files)
-            bg = BatchGenerator(self.dictionary).train_from_files(
-                batch_size=batch_size,
-                file_batch_size=file_batch_size,
-                max_seq_len=max_seq_len,
-                files=self.to_train_files,
-                output_list=self.trained_files)
-            
             for batch_nb,(input_batch,input_batch_lens,
-                          target_batch,target_batch_lens) in enumerate(bg):
-                loss,_ = self.model.train(self.sess,
+                          target_batch,target_batch_lens) in enumerate(train_generator):
+                loss = self.model.train(self.sess,
                                           input_batch,input_batch_lens,
                                           target_batch,target_batch_lens)
                 n_trained_files_new = len(self.trained_files)
@@ -325,17 +316,21 @@ class TrainController():
                                      batch_nb,loss)
                     self._save_train_status()
 
-    def predict(self,docs,batch_size=32):
+    def decode(self, decode_generator, batch_size=32,
+               decode_params={}):
         self.logger.info('Starting to predict...')
-        self._load_model(mode='decode')
-        bg = BatchGenerator(self.dictionary).predict_from_docs(docs,
-                                                               batch_size=batch_size)
-        for input_batch,input_batch_lens in bg:
-            pred = self.model.predict(self.sess, input_batch, input_batch_lens)
-            pred = pred.max(2)
-            doc = list(self.dictionary.seqs2docs(pred))[-1]
-            clean_doc = "".join([e for e in doc if e not in ['<PAD>','<EOS>']])
-            print('Prediction:',clean_doc)
+        
+        self._load_model(mode='decode',params=decode_params)
+        
+        for (doc_ar,source_seqs,source_lens,target_seqs,target_lens) in decode_generator:
+            pred = self.model.predict(self.sess, source_seqs, source_lens)
+            for (source,target),pred_seq in zip(doc_ar,pred):
+                print('\nSource:',source)
+                print('Target:',target)
+                for k in range(pred_seq.shape[1]):
+                    pred_doc = self.dictionary.seq2doc(pred_seq[:,k])
+                    print('Pred %d: %s' % (k+1,pred_doc))
+                
 
     #### SETTERS ####
     def set_dict_path(self,dict_path):

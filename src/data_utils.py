@@ -4,13 +4,14 @@ Created on 11.7.2017
 
 @author: Jesse
 '''
-import fileinput
 import inspect
+import types
 import math
 import time
 import numpy as np
 import pandas as pd
 from keras.preprocessing.sequence import pad_sequences
+from functools import partial
 
 from multiprocessing import cpu_count
 from multiprocessing.pool import Pool
@@ -39,6 +40,41 @@ def batchify(it, batch_size=32, shuffle=False, max_batches=None):
                     break
     if len(batch) > 0:
         yield batch
+    
+def rebatch(batches, 
+            in_batch_size_limit=8192, 
+            out_batch_size=32, 
+            shuffle=True, 
+            flatten=False):
+    """Convert input batches to output batches with different size."""
+    # Input
+    in_batches = []
+    in_batch_nb = 0
+    for in_batch in batches:
+        # Input
+        if flatten:
+            in_batches.extend(in_batch)
+            in_batch_nb += len(in_batch)
+        else:
+            in_batches.append(in_batch)
+            in_batch_nb += 1
+            
+        # Output
+        while in_batch_nb >= out_batch_size:
+            if shuffle:
+                np.random.shuffle(in_batches)
+            for out_batch in batchify(in_batches,
+                                      batch_size=out_batch_size,
+                                      shuffle=False):
+                yield out_batch
+                
+                in_batches = in_batches[in_batch_size_limit:]
+                in_batch_nb = len(in_batches)
+    
+    if len(in_batches) > 0:
+        if shuffle:
+            np.random.shuffle(in_batches)
+        yield out_batch
     
 def read_file_batched(filename, 
                       file_batch_size=8192, 
@@ -137,13 +173,13 @@ def read_files_batched(filenames,
                                            pd_kwargs=pd_kwargs):
                 yield batch
         
-def read_files_cycled(filenames, 
-                         max_file_pool_size=8,
-                         file_batch_size=8192,
-                         file_batch_shuffle=False,
-                         max_batches=math.inf,
-                         return_mode='array', 
-                         pd_kwargs={}):
+def read_files_cycled(filenames,
+                      max_file_pool_size=8,
+                      file_batch_size=8192,
+                      file_batch_shuffle=False,
+                      max_batches=math.inf,
+                      return_mode='array', 
+                      pd_kwargs={}):
     """Cycle over multiple files at once."""
     file_pool = []
     files_done_pool = []
@@ -152,43 +188,42 @@ def read_files_cycled(filenames,
     max_file_pool_size = min((max_file_pool_size,n_files_left))
     n_stop_iters = 0
     max_stop_iters = max_file_pool_size
-    while n_files_left > 0:
+    force_loop_restart = True
+    while n_files_left > 0 or force_loop_restart:
+        force_loop_restart = False
+        
+        # Add new file(s)
         while n_files_in_pool < max_file_pool_size and n_files_left > 0:
             new_filename = filenames.pop()
             new_batch_gen = read_file_batched(new_filename, 
-                                              file_batch_size=128)
+                                              file_batch_size=file_batch_size,
+                                              file_batch_shuffle=file_batch_shuffle,
+                                              max_batches=max_batches,
+                                              return_mode=return_mode,
+                                              pd_kwargs=pd_kwargs)
             file_pool.append((new_filename,new_batch_gen))
             n_files_in_pool = len(file_pool)
             n_files_left = len(filenames)
-            print('Added new file %s in pool (size %s)' % \
-                  (new_filename,n_files_in_pool))
-            print('Files left:',n_files_left)
-
-        for i,(filename,batch_gen) in enumerate(itertools.cycle(file_pool)):
+            
+        # Cycle until new files needs to be added or we reach the end of pool
+        for filename,batch_gen in itertools.cycle(file_pool):
             try:
                 batch = next(batch_gen)
-                yield i%n_files_in_pool,len(batch)
+                yield batch
             except StopIteration:
-                remove_idx = [i for i,(f,_) in enumerate(file_pool)\
-                              if f == filename][0]
+                remove_idx = file_pool.index((filename,batch_gen))
                 files_done_pool.append(file_pool.pop(remove_idx))
-                n_files_in_pool -= 1
-                print('File %s ended, pool size %d' % \
-                      (filename,n_files_in_pool))
+                n_files_in_pool = len(file_pool)
                 if n_files_left > 0:
                     break
                 else:
                     n_stop_iters += 1
                     if n_stop_iters < max_stop_iters:
-                        continue
+                        force_loop_restart = True
+                        break
                     else:
                         break
         
-    
-for k in read_files_sequenced(list_files_in_folder('./data/feed/processed2/IS/')[:8]+\
-                              list_files_in_folder('./data/feed/processed')):
-    print(k)
-    
 
 class FuncGenerator():
     """Pass generator through a function and return results as a generator"""
@@ -207,7 +242,7 @@ class FuncGenerator():
             
     def __repr__(self):
         return('<Generator object with func "%s" applied to iterable "%s">' % \
-               (self.func,self.it))
+               (self.func,self.gen))
 
 class DataPipeline():
     """Pass iterable or generator through multiple functions."""
@@ -216,15 +251,14 @@ class DataPipeline():
     n_layers = 0
         
     def _apply_func(self,func,data):
-        if inspect.isgenerator(data) or isinstance(data,FuncGenerator):
+        if isinstance(data,types.GeneratorType):
             return FuncGenerator(func,data)
         else:
             return func(data)
         
-    def add(self,func,name=None):
-        if name is None:
-            name = str(self.n_layers+1).zfill(2)+'_'+func.__name__
-        self.layers[self.n_layers].append((name,func))
+    def add(self,func,args=(),kwds={}):
+        name = str(self.n_layers+1).zfill(2)+'_'+func.__name__
+        self.layers[self.n_layers].append((name,partial(func,*args,**kwds)))
         self.n_layers += 1
         
     def run(self,data):
@@ -232,8 +266,8 @@ class DataPipeline():
         for i in range(self.n_layers):
             layer = self.layers[i]
             for _,func in layer:
-                self.data = self._apply_func(func,self.data_)
-        return(self.data)
+                self.data_ = self._apply_func(func,self.data_)
+        return(self.data_)
             
 class BatchGenerator():
     

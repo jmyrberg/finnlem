@@ -126,17 +126,28 @@ class Dictionary(object):
         print('Dictionary fitted with %d documents (%d tokens)' % \
               (self.n_docs,self.n_tokens))
         
-    def seq2doc(self,seq):
-        doc = [self.id2token[i] for i in seq]
+    def seq2doc(self,seq,remove_EOS=True,join=True,join_char=""):
+        doc = []
+        for i in seq:
+            if remove_EOS and i == self.EOS:
+                break
+            else:
+                doc.append(self.id2token[i])
+        if join:
+            doc = join_char.join(doc)
         return(doc)
     
     def seqs2docs(self,seqs):
         for seq in seqs:
             yield self.seq2doc(seq)
     
-    def doc2seq(self,doc,prepend_SOS=False,append_EOS=False):
+    def doc2seq(self, doc,
+                return_length=False,
+                prepend_SOS=False,
+                append_EOS=False):
         cnt = 0
-        seq = np.zeros(len(doc)+prepend_SOS+append_EOS,dtype=np.int32)
+        seq_len = len(doc)+prepend_SOS+append_EOS
+        seq = np.zeros(seq_len,dtype=np.int32)
         if prepend_SOS:
             seq[0] = self.SOS
             cnt += 1
@@ -144,12 +155,19 @@ class Dictionary(object):
             seq[i+cnt] = self.token2id.get(token,self.UNK)
         if append_EOS:
             seq[i+cnt+1] = self.EOS
-        return(seq)
+        if not return_length:
+            return seq
+        if return_length:
+            return [seq_len],seq
     
-    def docs2seqs(self,docs,prepend_GO=False,append_EOS=False):
+    def docs2seqs(self, docs,
+                  return_length=False,
+                  prepend_SOS=False,
+                  append_EOS=False):
         for doc in docs:
             yield self.doc2seq(doc,
-                               prepend_GO=prepend_GO,
+                               return_length=return_length,
+                               prepend_SOS=prepend_SOS,
                                append_EOS=append_EOS)
     
     def save(self,save_path):
