@@ -5,11 +5,13 @@ Created on 11.7.2017
 @author: Jesse
 '''
 import math
+
+from dictionary.dictionary import Dictionary
+from models.seq2seq import Seq2Seq
 import tensorflow as tf
-from data_utils import BatchGenerator
-from dictionary import Dictionary
-from models import Seq2Seq
-from utils import list_files_in_folder
+from utils.data_utils import BatchGenerator
+from utils.utils import list_files_in_folder
+
 
 def get_model_config(d):
     

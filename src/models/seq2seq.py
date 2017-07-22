@@ -6,24 +6,25 @@ Created on 11.7.2017
 '''
 import math
 
-import tensorflow as tf
-import tensorflow.contrib.seq2seq as seq2seq
-
+from tensorflow.contrib.seq2seq.python.ops import attention_wrapper
+from tensorflow.contrib.seq2seq.python.ops import beam_search_decoder
+from tensorflow.python.layers.core import Dense
+from tensorflow.python.ops import array_ops
+from tensorflow.python.ops.rnn_cell import DropoutWrapper, ResidualWrapper
 from tensorflow.python.ops.rnn_cell import GRUCell
 from tensorflow.python.ops.rnn_cell import LSTMCell
 from tensorflow.python.ops.rnn_cell import MultiRNNCell
-from tensorflow.python.ops.rnn_cell import DropoutWrapper, ResidualWrapper
-
-from tensorflow.python.ops import array_ops
-from tensorflow.python.layers.core import Dense
 from tensorflow.python.util import nest
 
-from tensorflow.contrib.seq2seq.python.ops import attention_wrapper
-from tensorflow.contrib.seq2seq.python.ops import beam_search_decoder
+import tensorflow as tf
+import tensorflow.contrib.seq2seq as seq2seq
+from utils.utils import create_folder
 
-class Seq2Seq(object):
+
+class Seq2Seq():
 
     def __init__(self, 
+                 model_dir='../data/testFolder/',
                  mode='train', 
                  cell_type='lstm', 
                  hidden_dim=128, 
@@ -42,9 +43,14 @@ class Seq2Seq(object):
                  optimizer='adam', 
                  learning_rate=0.0002,
                  max_gradient_norm=1.0,
+                 keep_every_n_hours=1,
+                 use_beamsearch=True,
                  beam_width=2, 
                  max_decode_step=30):
-        print('Initializing model...')
+
+        # Train location
+        self.model_dir = model_dir
+
         # Toggle between train and decode
         self.mode = mode.lower()
 
@@ -60,7 +66,7 @@ class Seq2Seq(object):
         
         self.dropout_rate = dropout_rate
         
-        self.dtype = tf.float32 if 'float32' else tf.float64
+        self.dtype = tf.float32 if dtype=='float32' else tf.float64
         
         # Obtained from dictionary
         self.num_encoder_symbols = num_encoder_symbols
@@ -73,29 +79,34 @@ class Seq2Seq(object):
         self.optimizer = optimizer
         self.learning_rate = learning_rate
         self.max_gradient_norm = max_gradient_norm
+        self.keep_every_n_hours = keep_every_n_hours
         
         # Decoding
-        # Beam width cannot be changed afterwards if set to 1
         self.beam_width = beam_width
+        self.use_beamsearch_decode = use_beamsearch \
+                                     and self.beam_width > 1 \
+                                     and self.mode == 'decode'
         self.max_decode_step = max_decode_step
- 
+        
         self._build_model()
        
     def _build_model(self):
-        print("Building model..")
         # Building encoder and decoder networks
         self._init_attributes()
         self._init_placeholders()
         self._build_encoder()
         self._build_decoder()
+        self._init_session()
 
     def _init_attributes(self):
-        self.use_beamsearch_decode = self.beam_width > 1 and self.mode == 'decode'
         self.use_dropout = True if self.dropout_rate == 0.0 else False
         self.keep_prob = 1.0 - self.dropout_rate        
 
     def _init_placeholders(self):
-        print('Initializing placeholders...')    
+        
+        # Training progress
+        self.global_step = tf.Variable(0, name='global_step', trainable=False)
+        
         # encoder_inputs: [batch_size, max_time_steps]
         self.encoder_inputs = tf.placeholder(dtype=tf.int32,
             shape=(None, None), name='encoder_inputs')
@@ -163,7 +174,6 @@ class Seq2Seq(object):
         return MultiRNNCell([self._build_single_cell() for _ in range(self.depth)])
 
     def _build_encoder(self):
-        print("Building encoder..")
         with tf.variable_scope('encoder'):
             # Encoder cell
             self.encoder_cell = self._build_encoder_cell()
@@ -269,7 +279,6 @@ class Seq2Seq(object):
         return MultiRNNCell(self.decoder_cell_list), decoder_initial_state
 
     def _build_decoder(self):
-        print("Building decoder and attention..")
         with tf.variable_scope('decoder'):
             # Decoder cell and initial state
             self.decoder_cell, self.decoder_initial_state = self._build_decoder_cell()
@@ -409,7 +418,6 @@ class Seq2Seq(object):
                     self.decoder_pred_decode = self.decoder_outputs_decode.predicted_ids
 
     def _init_optimizer(self):
-        print("setting optimizer..")
         # Gradients and SGD update operation for training the model
         trainable_params = tf.trainable_variables()
         if self.optimizer.lower() == 'adadelta':
@@ -429,8 +437,24 @@ class Seq2Seq(object):
 
         # Update the model
         self.updates = self.opt.apply_gradients(
-            zip(clip_gradients, trainable_params))
+            zip(clip_gradients, trainable_params), global_step=self.global_step)
 
+    def _init_session(self):
+        if not hasattr(self,'sess'):
+            self.saver = tf.train.Saver(
+                keep_checkpoint_every_n_hours=self.keep_every_n_hours)
+            self.sm = tf.train.SessionManager()
+            self.init_op = tf.global_variables_initializer()
+            create_folder(self.model_dir)
+            self.save_path = self.model_dir+'model'
+            self.sess = self.sm.prepare_session("",
+                                init_op=self.init_op,
+                                saver=self.saver,
+                                checkpoint_dir=self.model_dir)
+        else:
+            self.sess.close()
+            self._init_session()
+    
     def _check_feeds(self, encoder_inputs, encoder_inputs_length, 
                     decoder_inputs, decoder_inputs_length, decode):
         input_batch_size = encoder_inputs.shape[0]
@@ -456,24 +480,27 @@ class Seq2Seq(object):
             input_feed[self.decoder_inputs.name] = decoder_inputs
             input_feed[self.decoder_inputs_length.name] = decoder_inputs_length
 
-        return input_feed
-
-    def train(self, sess, encoder_inputs, encoder_inputs_length, 
+        return input_feed  
+    
+    def train(self, encoder_inputs, encoder_inputs_length, 
               decoder_inputs, decoder_inputs_length):
-        # Check if the model is 'training' mode
-        if self.mode != 'train':
-            raise ValueError("Train step can only be operated in train mode")
-
-        input_feed = self._check_feeds(encoder_inputs, encoder_inputs_length,
-                                      decoder_inputs, decoder_inputs_length, 
-                                      decode=False)
-        # Input feeds for dropout
-        input_feed[self.keep_prob_placeholder.name] = self.keep_prob
-        
-        output_feed = [self.updates,    # Update Op that does optimization
-                       self.loss]       # Loss for current batch
-        outputs = sess.run(output_feed, input_feed)
-        return outputs[1]
+        # Session context
+        while True:
+            # Check if the model is 'training' mode
+            if self.mode != 'train':
+                raise ValueError("Train step can only be operated in train mode")
+    
+            input_feed = self._check_feeds(encoder_inputs, encoder_inputs_length,
+                                          decoder_inputs, decoder_inputs_length, 
+                                          decode=False)
+            # Input feeds for dropout
+            input_feed[self.keep_prob_placeholder.name] = self.keep_prob
+            
+            output_feed = [self.updates,
+                           self.loss,
+                           self.global_step]
+            outputs = self.sess.run(output_feed, input_feed)
+            return outputs[1], outputs[2]
 
     def eval(self, sess, encoder_inputs, encoder_inputs_length,
              decoder_inputs, decoder_inputs_length):
@@ -486,13 +513,18 @@ class Seq2Seq(object):
         outputs = sess.run(output_feed, input_feed)
         return outputs[0], outputs[1]    # loss
 
-    def predict(self, sess, encoder_inputs, encoder_inputs_length):
+    def decode(self, encoder_inputs, encoder_inputs_length):
         input_feed = self._check_feeds(encoder_inputs, encoder_inputs_length, 
-                                      decoder_inputs=None, decoder_inputs_length=None, 
-                                      decode=True)
+                                       decoder_inputs=None, decoder_inputs_length=None, 
+                                       decode=True)
         # Input feeds for dropout
         input_feed[self.keep_prob_placeholder.name] = 1.0
  
         output_feed = [self.decoder_pred_decode]
-        outputs = sess.run(output_feed, input_feed)
+        outputs = self.sess.run(output_feed, input_feed)
         return outputs[0]
+    
+    def save(self):
+        self.saver.save(self.sess, self.save_path, 
+                        global_step=self.global_step,
+                        write_meta_graph=False)

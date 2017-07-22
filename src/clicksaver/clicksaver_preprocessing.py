@@ -6,8 +6,10 @@ Created on 11.7.2017
 '''
 import re
 import string
+
 from nltk import word_tokenize
 from nltk.stem.snowball import FinnishStemmer
+
 
 class Preprocessor():
     

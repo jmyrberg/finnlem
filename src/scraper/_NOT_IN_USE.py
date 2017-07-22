@@ -4,10 +4,12 @@ Created on 12.7.2017
 
 @author: Jesse
 '''
-import json
 import csv
+import json
 import re
-from utils import list_files_in_folder, create_folder
+
+from utils.utils import list_files_in_folder, create_folder
+
 
 class FeedProcessor(object):
     

@@ -4,14 +4,16 @@ Created on 14.7.2017
 
 @author: Jesse
 '''
-import logging
 import json
+import logging
 import tensorflow as tf
-from dictionary import Dictionary
-from models import Seq2Seq
+
+from os.path import exists, join
+
+from dictionary.dictionary import Dictionary
+from models.seq2seq import Seq2Seq
 from utils import create_folder, update_dict
-from os.path import exists,join
-from data_utils import BatchGenerator
+
 
 class TrainController():
     

@@ -4,10 +4,22 @@ Created on 12.7.2017
 
 @author: Jesse
 '''
-import numpy as np
-from utils import save_obj,load_obj,create_folder
 from collections import defaultdict, Counter
-from clicksaver_preprocessing import Preprocessor
+
+import numpy as np
+from utils.utils import save_obj, load_obj
+
+
+def load_dict(load_path):
+    dictionary = load_obj(load_path)
+    dictionary.counter = load_obj(load_path+'.counter')
+    dictionary.path = load_path
+    return(dictionary)
+    
+def save_dict(dictionary,save_path):
+    if dictionary.locked:
+        save_obj(dictionary,save_path,force=True)
+        save_obj(dictionary.counter,save_path+'.counter',force=True)
 
 class Dictionary(object):
     
@@ -175,10 +187,4 @@ class Dictionary(object):
             save_obj(self,save_path,force=True)
             save_obj(self.counter,save_path+'.counter',force=True)
             self.path = save_path
-        
-    def load(self,load_path):
-        dictionary = load_obj(load_path)
-        dictionary.counter = load_obj(load_path+'.counter')
-        dictionary.path = load_path
-        return(dictionary)
     

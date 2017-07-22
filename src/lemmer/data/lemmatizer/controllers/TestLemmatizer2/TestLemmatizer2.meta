@@ -1,0 +1,9 @@
+to_train_files_path = ./data/lemmatizer/controllers/TestLemmatizer2\to_train.files
+log_path = ./data/lemmatizer/controllers/TestLemmatizer2\TestLemmatizer2.log
+model_config_path = ./data/lemmatizer/controllers/TestLemmatizer2\model\TestLemmatizer2.config
+trained_files_path = ./data/lemmatizer/controllers/TestLemmatizer2\trained.files
+controller_dir = ./data/lemmatizer/controllers/TestLemmatizer2
+meta_path = ./data/lemmatizer/controllers/TestLemmatizer2\TestLemmatizer2.meta
+dict_path = ./data/lemmatizer/dicts/dictionary.dict
+model_path = ./data/lemmatizer/controllers/TestLemmatizer2\model\TestLemmatizer2.model
+model_dir = ./data/lemmatizer/controllers/TestLemmatizer2\model

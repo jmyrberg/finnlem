@@ -4,24 +4,25 @@ Created on 13.7.2017
 
 @author: Jesse
 '''
-import numpy as np
-
 from keras.preprocessing.sequence import pad_sequences
-from data_utils import read_files_cycled, rebatch
+
+import numpy as np
+from utils.data_utils import read_files_cycled, rebatch
 
 def process_doc(df,dict_vocab):
     for icol in [0,1]:
         # Convert accents apart from ä,ö
         valid_inds = ~df.iloc[:,icol].str.contains(r'ä|ö')
         df.loc[valid_inds,df.columns[icol]] = \
-            df.loc[valid_inds,df.columns[icol]].str.normalize('NFKD')\
-                                            .str.encode('ascii', errors='ignore')\
-                                            .str.decode('utf-8')
+            df.loc[valid_inds,df.columns[icol]]\
+                                    .str.normalize('NFKD')\
+                                    .str.encode('ascii', errors='ignore')\
+                                    .str.decode('utf-8')
         # Lowercase and strip
         df.iloc[:,icol] = df.iloc[:,icol].str.lower().str.strip()
         # Remove non-vocab characters
-        df.iloc[:,icol] = df.iloc[:,icol].apply(lambda x: "".join(
-                                                [c for c in x if c in dict_vocab]))
+        df.iloc[:,icol] = df.iloc[:,icol] \
+                .apply(lambda x: "".join([c for c in x if c in dict_vocab]))
         # Filter out rows with less than 3 letters
         df = df[df.iloc[:,icol].str.replace(r'\-|\#','').str.len() > 2]
         # Keep rows with length less than or equal to 50
@@ -29,10 +30,10 @@ def process_doc(df,dict_vocab):
     return df.values
 
 def doc2seq(ar,dictionary):
-    source_lens,source_seqs = zip(*list(dictionary.docs2seqs(ar[:,0],
-                                            return_length=True)))
-    target_lens,target_seqs = zip(*list(dictionary.docs2seqs(ar[:,1],
-                                            return_length=True)))
+    source_lens,source_seqs = zip(*list(
+                        dictionary.docs2seqs(ar[:,0],return_length=True)))
+    target_lens,target_seqs = zip(*list(
+                        dictionary.docs2seqs(ar[:,1],return_length=True)))
     return source_seqs,source_lens,target_seqs,target_lens
 
 def process_file_batch(batch,dictionary,return_original=False):

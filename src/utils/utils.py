@@ -4,10 +4,11 @@ Created on 12.7.2017
 
 @author: Jesse
 '''
-import pickle
 import datetime
-from os.path import isfile,exists,join,dirname,abspath
-from os import listdir,makedirs,walk
+from os import listdir, makedirs, walk
+from os.path import isfile, exists, join, dirname, abspath
+import pickle
+
 
 def save_obj(obj,filepath,force=False):
     if force:
