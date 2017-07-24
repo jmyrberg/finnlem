@@ -157,7 +157,6 @@ class Lemmer(object):
         if hasattr(self,'model') and self.model.mode == mode:
             pass
         elif hasattr(self,'model') and not self.model.mode == mode:
-            tf.reset_default_graph()
             self.model.sess.close()
             del self.model
             self._set_model(mode)
@@ -213,7 +212,6 @@ class Lemmer(object):
                 token_chars = self.dictionary.seq2doc(seq[:,k])
                 decoded_token = "".join(token_chars)
                 decoded_token_beams.append(decoded_token)
-                print(decoded_token)
             decoded_tokens.append(decoded_token_beams)
         return decoded_tokens
         
@@ -251,3 +249,9 @@ class Lemmer(object):
         decoded_tokens = self._convert_seqs_to_tokens(pred_seqs)
         return decoded_tokens
     
+    
+# l = Lemmer('../data/lemmer/models/testi')
+# for i in range(100):
+#     loss = l.train(['opuksemme','rollerisi']*32,['opus','rolleri']*32)
+#     print(i,loss)
+# print(l.decode(['opuksemme.','rollerisi']))

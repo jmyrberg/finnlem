@@ -93,6 +93,8 @@ class Seq2Seq(object):
        
     def _build_model(self):
         # Building encoder and decoder networks
+        tf.reset_default_graph()
+        #self.graph = tf.Graph()
         self._init_attributes()
         self._init_placeholders()
         self._build_encoder()
@@ -441,6 +443,7 @@ class Seq2Seq(object):
             zip(clip_gradients, trainable_params), global_step=self.global_step)
 
     def _init_session(self):
+        print('Init session...')
         if not hasattr(self,'sess'):
             self.saver = tf.train.Saver(
                 keep_checkpoint_every_n_hours=self.keep_every_n_hours)
@@ -452,9 +455,6 @@ class Seq2Seq(object):
                                 init_op=self.init_op,
                                 saver=self.saver,
                                 checkpoint_dir=self.model_dir)
-        else:
-            self.sess.close()
-            self._init_session()
     
     def _check_feeds(self, encoder_inputs, encoder_inputs_length, 
                     decoder_inputs, decoder_inputs_length, decode):
