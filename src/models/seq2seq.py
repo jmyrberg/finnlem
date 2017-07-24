@@ -4,6 +4,7 @@ Created on 11.7.2017
 
 @author: Jesse
 '''
+import os
 import math
 
 from tensorflow.contrib.seq2seq.python.ops import attention_wrapper
@@ -21,7 +22,7 @@ import tensorflow.contrib.seq2seq as seq2seq
 from utils.utils import create_folder
 
 
-class Seq2Seq():
+class Seq2Seq(object):
 
     def __init__(self, 
                  model_dir='../data/testFolder/',
@@ -446,7 +447,7 @@ class Seq2Seq():
             self.sm = tf.train.SessionManager()
             self.init_op = tf.global_variables_initializer()
             create_folder(self.model_dir)
-            self.save_path = self.model_dir+'model'
+            self.save_path = os.path.join(self.model_dir,'','model')
             self.sess = self.sm.prepare_session("",
                                 init_op=self.init_op,
                                 saver=self.saver,
@@ -511,7 +512,7 @@ class Seq2Seq():
         input_feed[self.keep_prob_placeholder.name] = 1.0
         output_feed = [self.loss]    # Loss for current batch
         outputs = sess.run(output_feed, input_feed)
-        return outputs[0], outputs[1]    # loss
+        return outputs[0]
 
     def decode(self, encoder_inputs, encoder_inputs_length):
         input_feed = self._check_feeds(encoder_inputs, encoder_inputs_length, 

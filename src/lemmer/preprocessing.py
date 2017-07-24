@@ -10,7 +10,16 @@ import numpy as np
 from utils.data_utils import read_files_cycled, rebatch
 
 def process_doc(df,dict_vocab):
+    """Clean words in a one or two-column dataframe."""
+    if df.shape[1] == 1:
+        print('SHAPE == 1')
+        df['_NO_TARGET_'] = '<NO_TARGET>'
+        print('Shape after',df.shape)
+    print(df.shape)
+    print(df.shape[1] == 1)
+    df = df.dropna()
     for icol in [0,1]:
+        print('Start shape',df.shape)
         # Convert accents apart from ä,ö
         valid_inds = ~df.iloc[:,icol].str.contains(r'ä|ö')
         df.loc[valid_inds,df.columns[icol]] = \
@@ -27,6 +36,7 @@ def process_doc(df,dict_vocab):
         df = df[df.iloc[:,icol].str.replace(r'\-|\#','').str.len() > 2]
         # Keep rows with length less than or equal to 50
         df = df[df.iloc[:,icol].str.len() <= 50]
+        print('End shape',icol,df.shape)
     return df.values
 
 def doc2seq(ar,dictionary):
@@ -36,9 +46,9 @@ def doc2seq(ar,dictionary):
                         dictionary.docs2seqs(ar[:,1],return_length=True)))
     return source_seqs,source_lens,target_seqs,target_lens
 
-def process_file_batch(batch,dictionary,return_original=False):
+def process_file_batch(df,dictionary,return_original=False):
     dict_vocab = list(dictionary.token2id.keys())
-    doc_ar = process_doc(batch,dict_vocab)
+    doc_ar = process_doc(df,dict_vocab)
     source_seqs,source_lens,target_seqs,target_lens = doc2seq(doc_ar,dictionary)
     if not return_original:
         return list(zip(source_seqs,source_lens,target_seqs,target_lens))

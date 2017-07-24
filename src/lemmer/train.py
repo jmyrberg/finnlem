@@ -7,7 +7,7 @@ Created on 19.7.2017
 import os
 
 from dictionary.dictionary import load_dict
-from preprocessing import generate_train_batches
+from lemmer.preprocessing import generate_train_batches
 from models.seq2seq import Seq2Seq
 from utils.utils import list_files_in_folder
 
@@ -15,7 +15,6 @@ from utils.utils import list_files_in_folder
 dict_path = '../data/lemmer/dicts/dictionary.dict'
 
 # Model
-mode = 'train'
 model_dir = '../data/trainFolder/'
 
 # Train
@@ -32,17 +31,20 @@ file_batch_size = 2500000
 save_every_n = 200
 keep_every_n_hours = 1
 
-
-def train_lemmer():
-    
-    # Init
-    model = Seq2Seq(mode=mode,
+def get_model_and_dict(model_dir,dict_path):
+    model = Seq2Seq(mode='train',
                     model_dir=model_dir,
                     dropout_rate=dropout_rate,
                     optimizer=optimizer,
                     learning_rate=learning_rate,
                     keep_every_n_hours=keep_every_n_hours)
     dictionary = load_dict(dict_path)
+    return model,dictionary
+
+def train_lemmer():
+    
+    # Init
+    model,dictionary = get_model_and_dict(model_dir, dict_path)
     
     # Train a single file or multiple
     if os.path.isfile(train_data_path):
@@ -66,4 +68,4 @@ def train_lemmer():
         if global_step % save_every_n == 0:
             model.save()
     
-train_lemmer()
+#train_lemmer()

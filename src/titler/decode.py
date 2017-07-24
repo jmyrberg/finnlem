@@ -7,7 +7,7 @@ Created on 22.7.2017
 import os
 
 from dictionary.dictionary import load_dict
-from lemmer.preprocessing import generate_decode_batches
+from preprocessing import generate_decode_batches
 from models.seq2seq import Seq2Seq
 from utils.utils import list_files_in_folder
 
@@ -15,7 +15,8 @@ from utils.utils import list_files_in_folder
 dict_path = '../data/lemmer/dicts/dictionary.dict'
 
 # Model
-model_dir = '../data/models/test_lemmer/'
+mode = 'decode'
+model_dir = '../data/trainFolder/'
 
 # Decode
 source_data_path = '../data/lemmer/test_data/'
@@ -25,17 +26,14 @@ batch_size = 64
 max_file_pool_size = 10
 file_batch_size = 50000
 
-def get_model_and_dict(model_dir,dict_path):
-    model = Seq2Seq(mode='decode',
-                    model_dir=model_dir,
-                    max_decode_step=max_decode_step)
-    dictionary = load_dict(dict_path)
-    return model,dictionary
 
 def decode_lemmer():
     
     # Init
-    model,dictionary = get_model_and_dict(model_dir, dict_path)
+    model = Seq2Seq(mode=mode,
+                    model_dir=model_dir,
+                    max_decode_step=max_decode_step)
+    dictionary = load_dict(dict_path)
     
     # Decode a single file or multiple
     if os.path.isfile(source_data_path):
@@ -61,7 +59,6 @@ def decode_lemmer():
             
             for k in range(pred_seq.shape[1]):
                 pred_doc = dictionary.seq2doc(pred_seq[:,k])
-                pred_doc = "".join(pred_doc)
                 print('{:>5s} #{:>1s}: {:<50s}'.format('Pred',str(k+1),pred_doc))
             
-#decode_lemmer()
+decode_lemmer()

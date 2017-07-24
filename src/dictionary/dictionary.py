@@ -125,6 +125,8 @@ class Dictionary(object):
                 if self.n_docs % prune_every_n == 0:
                     self._keep_n(reset_counter=False)
                     self._compactify()
+                    print('\nNumber of documents:',self.n_docs)
+                    self._print_debug()
         
     def fit(self,docs):
         self.fit_batch(docs)
@@ -138,15 +140,13 @@ class Dictionary(object):
         print('Dictionary fitted with %d documents (%d tokens)' % \
               (self.n_docs,self.n_tokens))
         
-    def seq2doc(self,seq,remove_EOS=True,join=True,join_char=""):
+    def seq2doc(self, seq, remove_EOS=True):
         doc = []
         for i in seq:
             if remove_EOS and i == self.EOS:
                 break
             else:
                 doc.append(self.id2token[i])
-        if join:
-            doc = join_char.join(doc)
         return(doc)
     
     def seqs2docs(self,seqs):
@@ -170,7 +170,7 @@ class Dictionary(object):
         if not return_length:
             return seq
         if return_length:
-            return [seq_len],seq
+            return seq,[seq_len]
     
     def docs2seqs(self, docs,
                   return_length=False,
@@ -187,4 +187,6 @@ class Dictionary(object):
             save_obj(self,save_path,force=True)
             save_obj(self.counter,save_path+'.counter',force=True)
             self.path = save_path
+        else:
+            print('Use .lock() -function before saving!')
     

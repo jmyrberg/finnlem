@@ -174,7 +174,7 @@ def read_files_cycled(filenames,
                       max_file_pool_size=8,
                       file_batch_size=8192,
                       file_batch_shuffle=False,
-                      max_batches=math.inf,
+                      max_batches_per_file=math.inf,
                       return_mode='array', 
                       pd_kwargs={}):
     """Cycle over multiple files at once."""
@@ -187,6 +187,7 @@ def read_files_cycled(filenames,
     max_stop_iters = max_file_pool_size
     force_loop_restart = True
     while n_files_left > 0 or force_loop_restart:
+        
         force_loop_restart = False
         
         # Add new file(s)
@@ -195,7 +196,7 @@ def read_files_cycled(filenames,
             new_batch_gen = read_file_batched(new_filename, 
                                               file_batch_size=file_batch_size,
                                               file_batch_shuffle=file_batch_shuffle,
-                                              max_batches=max_batches,
+                                              max_batches=max_batches_per_file,
                                               return_mode=return_mode,
                                               pd_kwargs=pd_kwargs)
             file_pool.append((new_filename,new_batch_gen))

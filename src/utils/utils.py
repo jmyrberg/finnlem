@@ -16,12 +16,10 @@ def save_obj(obj,filepath,force=False):
         create_folder(folder)
     with open(filepath, 'wb') as f:
             pickle.dump(obj, f, pickle.HIGHEST_PROTOCOL)
-    print('Saved successfully in %s!' % filepath)
         
 def load_obj(filename):
     with open(filename, 'rb') as f:
         obj = pickle.load(f)
-    print('Object loaded successfully from %s!' % filename)
     return(obj)
 
 def get_timestamp():
