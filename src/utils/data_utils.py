@@ -44,6 +44,7 @@ def rebatch(batches,
     # Input
     in_batches = []
     in_batch_nb = 0
+    out_batch = []
     for in_batch in batches:
         # Input
         if flatten:
@@ -83,6 +84,7 @@ def read_file_batched(filename,
     batch_iterator = pd.read_csv(filename, 
                                  chunksize=file_batch_size,
                                  **pd_kwargs)
+
     for batch_nb,batch_df in enumerate(batch_iterator):
         if batch_nb+1 <= max_batches:
             
@@ -187,6 +189,11 @@ def read_files_cycled(filenames,
     max_stop_iters = max_file_pool_size
     force_loop_restart = True
     while n_files_left > 0 or force_loop_restart:
+        
+        print('Files:',file_pool)
+        print('Done:',files_done_pool)
+        print('n_files:',n_files_in_pool)
+        print('n_left:',n_files_left)
         
         force_loop_restart = False
         

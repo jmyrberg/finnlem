@@ -93,8 +93,6 @@ class Seq2Seq(object):
        
     def _build_model(self):
         # Building encoder and decoder networks
-        tf.reset_default_graph()
-        #self.graph = tf.Graph()
         self._init_attributes()
         self._init_placeholders()
         self._build_encoder()
@@ -220,7 +218,6 @@ class Seq2Seq(object):
         # To use BeamSearchDecoder, encoder_outputs, encoder_last_state, encoder_inputs_length 
         # needs to be tiled so that: [batch_size, .., ..] -> [batch_size x beam_width, .., ..]
         if self.use_beamsearch_decode:
-            print("Use beamsearch decoding..")
             encoder_outputs = seq2seq.tile_batch(
                 self.encoder_outputs, multiplier=self.beam_width)
             encoder_last_state = nest.map_structure(
@@ -378,14 +375,12 @@ class Seq2Seq(object):
                                                                     end_token=self.end_token,
                                                                     embedding=embed_and_input_proj)
                     # Basic decoder performs greedy decoding at each time step
-                    print("Building greedy decoder..")
                     inference_decoder = seq2seq.BasicDecoder(cell=self.decoder_cell,
                                                              helper=decoding_helper,
                                                              initial_state=self.decoder_initial_state,
                                                              output_layer=output_layer)
                 else:
                     # Beamsearch is used to approximately find the most likely translation
-                    print("building beamsearch decoder..")
                     inference_decoder = beam_search_decoder.BeamSearchDecoder(cell=self.decoder_cell,
                                                                embedding=embed_and_input_proj,
                                                                start_tokens=start_tokens,
@@ -443,7 +438,6 @@ class Seq2Seq(object):
             zip(clip_gradients, trainable_params), global_step=self.global_step)
 
     def _init_session(self):
-        print('Init session...')
         if not hasattr(self,'sess'):
             self.saver = tf.train.Saver(
                 keep_checkpoint_every_n_hours=self.keep_every_n_hours)
@@ -526,6 +520,7 @@ class Seq2Seq(object):
         return outputs[0]
     
     def save(self):
+        create_folder(self.save_path)
         self.saver.save(self.sess, self.save_path, 
                         global_step=self.global_step,
                         write_meta_graph=False)
