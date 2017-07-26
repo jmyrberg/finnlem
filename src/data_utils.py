@@ -14,8 +14,7 @@ import time
 import numpy as np
 import pandas as pd
 
-
-SEED = 2017
+SEED = 2018
     
 def batchify(it, batch_size=32, shuffle=False, max_batches=None):
     """Return iterable in batches."""
@@ -189,11 +188,6 @@ def read_files_cycled(filenames,
     max_stop_iters = max_file_pool_size
     force_loop_restart = True
     while n_files_left > 0 or force_loop_restart:
-        
-        print('Files:',file_pool)
-        print('Done:',files_done_pool)
-        print('n_files:',n_files_in_pool)
-        print('n_left:',n_files_left)
         
         force_loop_restart = False
         

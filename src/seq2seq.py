@@ -1,9 +1,6 @@
 # -*- coding: utf8 -*-
-'''
-Created on 24.7.2017
+"""Wrappers for tensorflow models."""
 
-@author: Jesse
-'''
 
 import os
 import json
@@ -17,17 +14,40 @@ from nltk.tokenize import word_tokenize
 from nltk.tokenize.moses import MosesDetokenizer
 from nltk.stem import SnowballStemmer 
 
-from models.seq2seq import Seq2Seq
-from utils.utils import create_folder
-from dictionary.dictionary import load_dict
+from tf_models import Seq2SeqModel
+from utils import create_folder
+from dictionary import load_dict
+
 
 ALLOWED_ACCENTS = ['ä','ö']
 STEMMER = SnowballStemmer('finnish')
 DETOKENIZER = MosesDetokenizer('finnish')
+"""
+Module level variables:
+    ALLOWED_ACCENTS (list): List of accented letters that shouldn't be removed.
+    STEMMER (SnowballStemmer): Stemmer to use for stemming. Must have a 
+        'stem' -method that takes a token as an input.
+    DETOKENIER (MosesDetokenizer): Detokenizer to use for constructing
+        the original string back. Must have a 'detokenize' -method.
+"""
+
 
 def doc_to_tokens(doc):
-    # Tokenize
+    """Convert a document string to tokens.
+    
+    Args:
+        doc (str): Document to split into tokens.
+        
+    Returns:
+        List of tokens.
+        
+    Example:
+        >>> doc = 'This is my sentence.'
+        >>> tokens = doc_to_tokens(doc)
+        >>> print(tokens)
+    """
     try:
+        # Tokenize
         tokens = word_tokenize(doc)
         tokens_stemmed = [STEMMER.stem(token) for token in tokens]
         
@@ -46,8 +66,32 @@ def doc_to_tokens(doc):
     finally:   
         return cleaned_tokens
 
-class Titler(object):
-    """
+
+class Seq2Seq(object):
+    """Wrapper for Seq2SeqModel.
+    
+    Args:
+        model_dir (str): 
+        dict_path (str): 
+        **kwargs: 
+        
+    Examples:
+        Create a new model:
+        >>> # Path to folder where the model will be created
+        >>> model_dir = './MyModel/'
+        >>> # Path to existing, trained Dictionary
+        >>> dict_path = './data/dicts/dictionary.dict' 
+        >>> # Create model with default params
+        >>> m = Seq2Seq(model_dir, dict_path)
+        
+        Train a batch:
+        >>> source_docs = ['koiramme','koirasi']
+        >>> target_docs = ['koira','koira']
+        >>> m.train(source_docs, target_docs)
+        
+        Decode a batch:
+        >>> decoded_docs = m.decode(['koirasi','koiramme'])
+        >>> print(decoded_docs)
     """
     
     model_config = {}
@@ -62,7 +106,7 @@ class Titler(object):
         self._init_config()
         
     def _init_config(self):
-        """Initialize titler configurations."""
+        """Initialize model configurations."""
         self.config_path = os.path.join(self.model_dir,'model.config')
         if not os.path.exists(self.config_path):
             if self.dict_path is None:
@@ -71,7 +115,7 @@ class Titler(object):
         self._read_config()
         
     def _write_config(self):
-        """Write titler and Seq2Seq -model configurations to file."""
+        """Write model configuration file."""
         self.model_config['model_dir'] = self.model_dir
         self.titler_config['dict_path'] = self.dict_path
         
@@ -84,7 +128,7 @@ class Titler(object):
             f.write(json.dumps(config,indent=2))
             
     def _read_config(self):
-        """Read titler and Seq2Seq -model configurations from file."""
+        """Read model configurations from file."""
         with open(self.config_path,'r',encoding='utf8') as f:
                 config = json.loads(f.read(),encoding='utf8')
         
@@ -96,7 +140,7 @@ class Titler(object):
         self.dict_path = config['titler']['dict_path']
         self.dictionary = load_dict(self.dict_path)
         
-    def _set_model(self,mode):
+    def _set_model(self ,mode):
         """Toggle between 'train' and 'decode mode of Seq2Seq."""
         if hasattr(self,'model') and self.model.mode == mode:
             pass
@@ -108,7 +152,8 @@ class Titler(object):
         elif not hasattr(self,'model'):
             self._create_model(mode)
         
-    def _create_model(self,mode):
+    def _create_model(self, mode):
+        """Create a new Seq2SeqModel."""
         model_config = self.model_config
         model_config['mode'] = mode
         model_config['num_encoder_symbols'] = self.dictionary.n_tokens
@@ -116,24 +161,23 @@ class Titler(object):
         model_config['start_token'] = self.dictionary.SOS
         model_config['end_token'] = self.dictionary.EOS
         model_config['pad_token'] = self.dictionary.PAD
-        self.model = Seq2Seq(**model_config)
+        self.model = Seq2SeqModel(**model_config)
         self.model.sess.graph.finalize()
         
-    def _docs_to_seqs(self,docs,max_seq_len=None):
-        """
-        <DESC>
+    def _docs_to_seqs(self, docs, max_seq_len=None):
+        """Convert documents to sequences.
         
         Args: 
-            <>: 
+            docs (list): List of document strings.
+            max_seq_len (int): Maximum sequence length. Defaults to None. 
           
-        Returns: 
-            <>: 
-            <>: 
+        Returns:
+            Padded array of sequences and their lengths without padding.
         """
         # Documents to tokens
         tokens = [doc_to_tokens(doc) for doc in docs]
 
-        # Encode tokens using dictionary
+        # Encode tokens using dictionary_
         encoded_seqs = self.dictionary.docs2seqs(tokens,
                                                  return_length=True)
         seqs,seq_lens = zip(*list(encoded_seqs))
@@ -144,22 +188,20 @@ class Titler(object):
             maxlen = seq_lens.max()
         else:
             maxlen = min((seq_lens.max(),max_seq_len))
-        print(maxlen)
         seqs = pad_sequences(seqs, maxlen=maxlen, dtype=np.int32,
                              padding='post', truncating='post',
                              value=self.dictionary.PAD)
-            
         return seqs,seq_lens
         
-    def _seqs_to_docs(self,seqs):
+    def _seqs_to_docs(self, seqs):
         """Convert decoded sequences back to sentences
         
         Args:
-            seqs: Array of sequences, size 
-                  [batch_size,max_decode_steps,beam_width]
+            seqs: Array of sequences, with the size of
+                [batch_size,max_decode_steps,beam_width]
         
         Returns:
-            Lists of lists of decoded sentences, with length batch_size
+            List of lists of decoded sentences.
         """
         docs = []
         for seq in seqs:
@@ -171,15 +213,15 @@ class Titler(object):
             docs.append(beams)
         return docs
         
-    def train(self,source_docs,target_docs,max_seq_len=None):
-        """Perform a training step.
+    def train(self, source_docs, target_docs, max_seq_len=None):
+        """Perform a model training step.
         
         Args:
-            source_tokens: List of tokens to feed in encoder
-            target_tokens: list of tokens to use as a decoder target
+            source_docs: List of source documents to feed in encoder.
+            target_docs: List of target documents for decoder to learn from.
             
         Returns:
-            Loss after training step has been performed
+            Bathc loss and global step of the model.
         """
         self._set_model('train')
         source_seqs,source_lens = self._docs_to_seqs(source_docs,
@@ -193,14 +235,14 @@ class Titler(object):
             print('Model saved!')
         return loss,global_step
         
-    def decode(self,source_docs):
-        """Decode a list of tokens into their baseform.
+    def decode(self, source_docs):
+        """Decode source documents to their target form.
         
         Args:
-            source_tokens: List of tokens to feed in encoder
+            source_docs: List of documents to feed in encoder.
             
         Returns:
-            List of tokens in their baseform
+            List of decoded documents.
         """
         self._set_model('decode')
         seqs,seq_lens = self._docs_to_seqs(source_docs)

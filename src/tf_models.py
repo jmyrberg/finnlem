@@ -4,8 +4,12 @@ Created on 11.7.2017
 
 @author: Jesse
 '''
+
+
 import os
 import math
+
+import numpy as np
 
 from tensorflow.contrib.seq2seq.python.ops import attention_wrapper
 from tensorflow.contrib.seq2seq.python.ops import beam_search_decoder
@@ -19,22 +23,24 @@ from tensorflow.python.util import nest
 
 import tensorflow as tf
 import tensorflow.contrib.seq2seq as seq2seq
-from utils.utils import create_folder
+
+from utils import create_folder
 
 
-class Seq2Seq(object):
+class Seq2SeqModel(object):
 
     def __init__(self, 
                  model_dir='../data/testFolder/',
                  mode='train', 
                  cell_type='lstm', 
-                 hidden_dim=128, 
-                 embedding_dim=64, 
+                 hidden_dim=256, 
+                 embedding_dim=128, 
                  depth=2, 
                  attn_type='bahdanau', 
                  attn_input_feeding=True,
                  use_residual=True, 
-                 dropout_rate=0.0,
+                 reverse_source=True,
+                 dropout_rate=0.2,
                  dtype='float32',
                  num_encoder_symbols=30000, 
                  num_decoder_symbols=30000,
@@ -42,11 +48,11 @@ class Seq2Seq(object):
                  end_token=1, 
                  pad_token=0, 
                  optimizer='adam', 
-                 learning_rate=0.0002,
+                 learning_rate=0.00005,
                  max_gradient_norm=1.0,
                  keep_every_n_hours=1,
-                 use_beamsearch=True,
-                 beam_width=2, 
+                 use_beamsearch=False,
+                 beam_width=1, 
                  max_decode_step=30):
 
         # Train location
@@ -64,12 +70,13 @@ class Seq2Seq(object):
         self.attn_type = attn_type
         self.attn_input_feeding = attn_input_feeding
         self.use_residual = use_residual
+        self.reverse_source = reverse_source
         
         self.dropout_rate = dropout_rate
         
-        self.dtype = tf.float32 if dtype=='float32' else tf.float64
+        self.dtype = tf.float16 if dtype=='float16' else tf.float32
         
-        # Obtained from dictionary
+        # Obtained from dictionary_
         self.num_encoder_symbols = num_encoder_symbols
         self.num_decoder_symbols = num_decoder_symbols
         self.start_token = start_token
@@ -101,7 +108,9 @@ class Seq2Seq(object):
 
     def _init_attributes(self):
         self.use_dropout = True if self.dropout_rate == 0.0 else False
-        self.keep_prob = 1.0 - self.dropout_rate        
+        self.keep_prob = 1.0 - self.dropout_rate
+        self.n_params = np.sum([np.prod(v.get_shape().as_list()) 
+                                for v in tf.trainable_variables()])
 
     def _init_placeholders(self):
         
@@ -115,6 +124,12 @@ class Seq2Seq(object):
         # encoder_inputs_length: [batch_size]
         self.encoder_inputs_length = tf.placeholder(
             dtype=tf.int32, shape=(None,), name='encoder_inputs_length')
+        
+        # Reverse encoder inputs
+        if self.reverse_source:
+            self.encoder_inputs = tf.reverse_sequence(self.encoder_inputs, 
+                                    seq_lengths=self.encoder_inputs_length,
+                                    seq_dim=1, batch_dim=0)
 
         self.keep_prob_placeholder = tf.placeholder(self.dtype, shape=[], name='keep_prob')
         
@@ -207,7 +222,7 @@ class Seq2Seq(object):
             self.encoder_outputs, self.encoder_last_state = tf.nn.dynamic_rnn(
                 cell=self.encoder_cell, inputs=self.encoder_inputs_embedded,
                 sequence_length=self.encoder_inputs_length, dtype=self.dtype,
-                time_major=False, swap_memory=True)
+                time_major=False, swap_memory=False)
 
     def _build_decoder_cell(self):
         
@@ -229,13 +244,15 @@ class Seq2Seq(object):
         # 'Bahdanau' style attention: https://arxiv.org/abs/1409.0473
         if self.attn_type == 'bahdanau':
             self.attention_mechanism = attention_wrapper.BahdanauAttention(
-                num_units=self.hidden_dim, memory=encoder_outputs,
+                num_units=self.hidden_dim/2, memory=encoder_outputs,
                 memory_sequence_length=encoder_inputs_length,) 
+            output_attention = False
         # 'Luong' style attention: https://arxiv.org/abs/1508.04025
         elif self.attn_type == 'luong':
             self.attention_mechanism = attention_wrapper.LuongAttention(
-                num_units=self.hidden_dim, memory=encoder_outputs, 
+                num_units=self.hidden_dim/2, memory=encoder_outputs, 
                 memory_sequence_length=encoder_inputs_length,)
+            output_attention = True
  
         # Building decoder_cell
         self.decoder_cell_list = [
@@ -246,17 +263,22 @@ class Seq2Seq(object):
                 return inputs
 
             # Essential when use_residual=True
-            _input_layer = Dense(self.hidden_dim, dtype=self.dtype,
-                                 name='attn_input_feeding')
-            return _input_layer(array_ops.concat([inputs, attention], -1))
+            if self.use_residual:
+                _input_layer = Dense(self.hidden_dim, dtype=self.dtype,
+                                     name='attn_input_feeding')
+                return _input_layer(array_ops.concat([inputs, attention], -1))
+            else:
+                return array_ops.concat([inputs, attention], -1)
 
         # AttentionWrapper wraps RNNCell with the attention_mechanism
         # Note: We implement Attention mechanism only on the top decoder layer
+        
         self.decoder_cell_list[-1] = attention_wrapper.AttentionWrapper(
             cell=self.decoder_cell_list[-1],
             attention_mechanism=self.attention_mechanism,
             attention_layer_size=None,
             cell_input_fn=attn_decoder_input_fn,
+            output_attention=output_attention,
             initial_cell_state=encoder_last_state[-1],
             alignment_history=False,
             name='Attention_Wrapper')
@@ -358,6 +380,7 @@ class Seq2Seq(object):
                                                   weights=self.masks,
                                                   average_across_timesteps=True,
                                                   average_across_batch=True,)
+                tf.summary.scalar('loss',self.loss)
                 
                 self._init_optimizer()
 
@@ -445,10 +468,12 @@ class Seq2Seq(object):
             self.init_op = tf.global_variables_initializer()
             create_folder(self.model_dir)
             self.save_path = os.path.join(self.model_dir,'','model')
-            self.sess = self.sm.prepare_session("",
-                                init_op=self.init_op,
-                                saver=self.saver,
-                                checkpoint_dir=self.model_dir)
+            self.summary_op = tf.summary.merge_all()
+            self.sess = self.sm.prepare_session("", init_op=self.init_op,
+                                saver=self.saver, checkpoint_dir=self.model_dir)
+            log_dir = self.model_dir+'/log'
+            create_folder(log_dir)
+            self.summary_writer = tf.summary.FileWriter(log_dir,self.sess.graph)
     
     def _check_feeds(self, encoder_inputs, encoder_inputs_length, 
                     decoder_inputs, decoder_inputs_length, decode):
@@ -493,8 +518,10 @@ class Seq2Seq(object):
             
             output_feed = [self.updates,
                            self.loss,
-                           self.global_step]
+                           self.global_step,
+                           self.summary_op]
             outputs = self.sess.run(output_feed, input_feed)
+            self.summary_writer.add_summary(outputs[3],outputs[2])
             return outputs[1], outputs[2]
 
     def eval(self, sess, encoder_inputs, encoder_inputs_length,
@@ -520,7 +547,6 @@ class Seq2Seq(object):
         return outputs[0]
     
     def save(self):
-        create_folder(self.save_path)
         self.saver.save(self.sess, self.save_path, 
                         global_step=self.global_step,
                         write_meta_graph=False)
