@@ -2,22 +2,21 @@
 
 **finnlem** is a [neural network](https://en.wikipedia.org/wiki/Artificial_neural_network) based [lemmatizer](https://en.wikipedia.org/wiki/Lemmatisation) model for [Finnish language](https://en.wikipedia.org/wiki/Finnish_language).
 
-A trained neural network can map given Finnish words into their base form:
+A trained neural network can map given Finnish words into their base form with quite reasonable accuracy. These are examples of the model output:
 ```
-Original	   Base Form
-'koira'    --> 'koira'
-'koiran'   --> 'koira'
-'koiraa'   --> 'koira'
-'koiraksi' --> 'koira'
-'koirasta' --> 'koira'
+[ORIGINAL]					   [BASE FORM]
+Kiinalaisessa				--> kiinalainen
+osinkotulojen				-->	osinko#tulo	
+Rajoittavalla				-->	rajoittaa
+multimediaopetusmateriaalia	-->	multi#media#opetus#materiaali
+ei-rasistisella				--> ei-rasistinen
 ```
-The model is a [tensorflow](https://www.tensorflow.org) implementation of a [sequence-to-sequence](https://arxiv.org/abs/1406.1078) recurrent neural network model. 
+The model is a [tensorflow](https://www.tensorflow.org) implementation of a [sequence-to-sequence](https://arxiv.org/abs/1406.1078) (Seq2Seq) recurrent neural network model. 
 This repository contains the code and data needed for training and making predictions with the model. The [datasets](src/data/datasets) contain over 2M samples in total.
 
 ## Features
 ![Tensorboard](doc/tensorboard.JPG)
-![Sequence-to-sequence graph](doc/tensorboard-graph.JPG)
-* Easy-to-use Python wrappers for sequence-to-sequence modeling
+* Easy-to-use Python wrapper for sequence-to-sequence modeling
 * Automatical session handling, model checkpointing and logging
 * Support for tensorboard
 * Sequence-to-sequence model features: [Bahdanau](https://arxiv.org/abs/1409.0473) and [Luong](https://arxiv.org/abs/1508.04025) attention, residual connections, dropout, beamsearch decoding, ...
@@ -35,17 +34,24 @@ After this, clone this repository to your local machine.
 
 ## Example usage
 
-### Python
+Three-steps are required in order to make predictions with a trained model:
+
+1. **Dictionary training**: Dictionary is created from training documents, which are processed the same way as the Seq2Seq model inputs later on.
+	Dictionary handles vocabulary/integer mappings required by Seq2Seq.
+2. **Model training**: Seq2Seq model is trained in batches with training documents that contain source and target.
+3. **Model decoding**: Unseen source documents are fed into Seq2Seq model, which makes predictions on the target.
+
+### Python ([See list of available methods here](src/python_api.md))
 
 The following is a simple example of using some of the features in the Python API.
 See more detailed descriptions of functions and parameters available from the source code documentation.
 
-#### 1. Fit a dictionary with default parameters
+#### 1. Dictionary training - fit a dictionary with default parameters
 ```python
 from dictionary import Dictionary
 
 # Documents to fit in dictionary
-docs = ['abcdefghijklmnopqrstuvwxyz','åäö','DNP','#-']
+docs = ['abcdefghijklmnopqrstuvwxyz','åäö','@?*#-']
 
 # Create a new Dictionary object
 d = Dictionary()
@@ -57,7 +63,7 @@ d.fit(docs)
 d.save('./data/dictionaries/lemmatizer.dict')
 ```
 
-#### 2. Create and train a Seq2Seq model with default parameters
+#### 2. Model training - create and train a Seq2Seq model with default parameters
 ```python
 from model_wrappers import Seq2Seq
 
@@ -75,7 +81,7 @@ for i in range(100):
 	print('Global step %d loss: %f' % (global_step,loss))
 ```
 		
-#### 3. Make predictions on test set
+#### 3. Model decoding - make predictions on test data
 ```python
 test_docs = ['koiraa','koirana','koiraksi']
 pred_docs = model.decode(test_docs)
@@ -83,11 +89,11 @@ print(pred_docs) # --> [['koira'],['koira'],['koira']]
 ```
 
 
-### Command line
+### Command line ([See list of available commands here](src/commands.md))
 
 The following is a bit more complicated example of using the command line to train and predict from files.
 
-#### 1. Fit a dictionary with default parameters
+#### 1. Dictionary training - fit a dictionary with default parameters
 ```
 python -m dict_train
 		--dict-save-path ./data/dictionaries/lemmatizer.dict
@@ -95,35 +101,39 @@ python -m dict_train
 ```
 The dictionary train path file(s) should contain one document per line ([example](src/data/dictionaries/lemmatizer.vocab)).
 
-#### 2. Create and train a Seq2Seq model with default parameters
+#### 2. Model training - create and train a Seq2Seq model with default parameters
 ```
 python -m model_train
 		--model-dir ./data/models/lemmatizer
 		--dict-path ./data/dictionaries/lemmatizer.dict
 		--train-data-path ./data/datasets/lemmatizer_train.csv
-		--validation-data-path ./data/datasets/lemmatizer_validation.csv
-		--validate-n-rows 5000
-		
-python -m model_train ^
-		--model-dir ./data/models/lemmatizer ^
-		--dict-path ./data/dictionaries/lemmatizer.dict ^
-		--train-data-path ./data/datasets/lemmatizer_train.csv ^
-		--validation-data-path ./data/datasets/lemmatizer_validation.csv ^
-		--validate-n-rows 5000
 ```
 The model train and validation data path file(s) should contain one source and target document per line, 
 separated by a comma ([example](src/data/datasets/lemmatizer_validation.csv)).
 		
-#### 3. Make predictions on test set
+#### 3. Model decoding - make predictions on test data
 ```
-python -m model_decode ^
-		--model-dir ./data/models/lemmatizer ^
-		--test-data-path ./data/datasets/lemmatizer_test.csv ^
+python -m model_decode
+		--model-dir ./data/models/lemmatizer
+		--test-data-path ./data/datasets/lemmatizer_test.csv
 		--decoded-data-path ./data/decoded/lemmatizer_decoded.csv
 ```
-The model source data path file(s) should contain either:
+The model test data path file(s) should contain either:
 * one source document per line, or
 * one source and target document per line, separated by a comma ([example](src/data/datasets/lemmatizer_test.csv))
+
+## Extensions
+* To use tensorboard, run command ```python -m tensorflow.tensorboard --logdir=model_dir```, 
+where ```model_dir``` is the Seq2Seq model checkpoint folder.
+* The model was originally created for summarizing Finnish news, by using news contents as the sources, and news titles as the targets.
+This proved to be quite a difficult task due to rich morphology of Finnish language, and lack of computational resources. My first
+approach to tackle this was to use the base forms for each word, which is what this package can do. In the end, using this model to convert
+every word to their base form would've taken too long.
+
+	In the end, I decided to use the [Finnish SnowballStemmer from nltk](http://www.nltk.org/_modules/nltk/stem/snowball.html), and train
+	the model with 100k vocabulary. After 36 hours of training with loss decreasing very slowly, I decided to keep this package as the character-level.
+	However, in [model_wrappers.py](src/model_wrappers.py), there is a global variable *DOC_HANDLER_FUNC*, which enables one to change the preprocessing method easily from
+	characters to words by setting ```DOC_HANDLER_FUNC='WORD'```.
 
 
 ## Acknowledgements and references

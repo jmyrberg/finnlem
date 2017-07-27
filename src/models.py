@@ -1,9 +1,8 @@
 # -*- coding: utf8 -*-
-'''
-Created on 11.7.2017
+"""Tensorflow implementation for sequence-to-sequence.
 
-@author: Jesse
-'''
+Modified from github.com/JayParks/tf-seq2seq.
+"""
 
 
 import os
@@ -24,7 +23,7 @@ from tensorflow.python.util import nest
 import tensorflow as tf
 import tensorflow.contrib.seq2seq as seq2seq
 
-from utils import create_folder
+from utils import create_folder, get_default_args
 
 
 class Seq2SeqModel(object):
@@ -33,12 +32,13 @@ class Seq2SeqModel(object):
                  model_dir='./',
                  mode='train', 
                  cell_type='lstm', 
-                 hidden_dim=256, 
+                 hidden_dim=256,
+                 attn_dim=None,
                  embedding_dim=128, 
                  depth=2, 
                  attn_type='bahdanau', 
                  attn_input_feeding=True,
-                 use_residual=True, 
+                 use_residual=False, 
                  reverse_source=True,
                  dropout_rate=0.2,
                  dtype='float32',
@@ -51,7 +51,6 @@ class Seq2SeqModel(object):
                  learning_rate=0.0001,
                  max_gradient_norm=1.0,
                  keep_every_n_hours=1,
-                 use_beamsearch=False,
                  beam_width=1, 
                  max_decode_step=30):
 
@@ -64,6 +63,7 @@ class Seq2SeqModel(object):
         # Network building
         self.cell_type = cell_type
         self.hidden_dim = hidden_dim
+        self.attn_dim = hidden_dim if attn_dim is None else attn_dim
         self.embedding_dim = embedding_dim
         self.depth = depth
         
@@ -91,9 +91,7 @@ class Seq2SeqModel(object):
         
         # Decoding
         self.beam_width = beam_width
-        self.use_beamsearch_decode = use_beamsearch \
-                                     and self.beam_width > 1 \
-                                     and self.mode == 'decode'
+        self.use_beamsearch_decode = self.beam_width > 1 and self.mode == 'decode'
         self.max_decode_step = max_decode_step
         
         self._build_model()
@@ -244,13 +242,13 @@ class Seq2SeqModel(object):
         # 'Bahdanau' style attention: https://arxiv.org/abs/1409.0473
         if self.attn_type == 'bahdanau':
             self.attention_mechanism = attention_wrapper.BahdanauAttention(
-                num_units=self.hidden_dim/2, memory=encoder_outputs,
+                num_units=self.attn_dim, memory=encoder_outputs,
                 memory_sequence_length=encoder_inputs_length,) 
             output_attention = False
         # 'Luong' style attention: https://arxiv.org/abs/1508.04025
         elif self.attn_type == 'luong':
             self.attention_mechanism = attention_wrapper.LuongAttention(
-                num_units=self.hidden_dim/2, memory=encoder_outputs, 
+                num_units=self.attn_dim, memory=encoder_outputs, 
                 memory_sequence_length=encoder_inputs_length,)
             output_attention = True
  
@@ -506,6 +504,9 @@ class Seq2SeqModel(object):
             input_feed[self.decoder_inputs_length.name] = decoder_inputs_length
 
         return input_feed  
+    
+    def get_params(self):
+        return get_default_args(self.__init__)
     
     def train(self, encoder_inputs, encoder_inputs_length, 
               decoder_inputs, decoder_inputs_length):

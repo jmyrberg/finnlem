@@ -3,10 +3,24 @@
 
 
 import datetime
+import inspect
 import pickle
 
 from os import makedirs, walk
 from os.path import isfile, exists, join, dirname, abspath
+
+
+def get_default_args(func):
+    """Get default arguments for a function.
+    
+    Args:
+        func (function): Function with default arguments.
+        
+    Returns:
+        Dictionary of key and value pairs {'arg_name':default_value}.
+    """
+    args, _, _, defaults = inspect.getargspec(func)
+    return dict(zip(args[-len(defaults):], defaults))
 
 
 def get_path_files(path):

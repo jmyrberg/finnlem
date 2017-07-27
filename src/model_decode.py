@@ -5,7 +5,7 @@
 import argparse
 import os
 
-from datetime import datetime
+#from datetime import datetime
 
 from model_wrappers import Seq2Seq
 from utils import get_path_files, create_folder
@@ -14,7 +14,7 @@ from data_utils import read_files_cycled, rebatch
 
 parser = argparse.ArgumentParser('Model decoding')
 
-# Path parameters
+# Path parameters (required)
 parser.add_argument("--model-dir", required=True,
                     type=str, action='store',
                     help='Model checkpoint and log save path')
@@ -23,20 +23,16 @@ parser.add_argument("--test-data-path", required=True,
                     help='Path to source data to decode')
 parser.add_argument("--decoded-data-path", required=True,
                     type=str, action='store',
-                    help='Path to existing Dictionary')
+                    help='Output file for decoded documents')
 
-# Path parameters (optional)
-parser.add_argument("--dict-path", default=None,
-                    type=str, action='store',
-                    help='Path to existing Dictionary')
-
-# Decoder parameters
+# Decoder parameters (optional)
 parser.add_argument("--beam-width", default=1,
                     type=int, action='store',
-                    help='Path to source data to decode')
+                    help='Number of beams when using beamsearch. When'
+                    'beam-width=1, greedy decoder will be used instead.')
 parser.add_argument("--max-decode-step", default=30,
                     type=int, action='store',
-                    help='Path to source data to decode')
+                    help='Maximum sequence length when decoding')
 parser.add_argument("--batch-size", default=32,
                     type=int, action='store',
                     help='Batch size to feed into model')
@@ -52,9 +48,9 @@ def decode_model(args):
 
     # Model
     model = Seq2Seq(model_dir=args.model_dir)
-    
+
     # Files to be decoded
-    files = get_path_files(args.source_data_path)
+    files = get_path_files(args.test_data_path)
     
     # Batch generator
     # File batches
@@ -79,10 +75,9 @@ def decode_model(args):
         print('Batch number {}'.format(batch_nb))
         
         if batch_nb == 0:
-            
             # Number of columns in batch
             n_cols = len(batch[0])
-            print(n_cols)
+            
             if n_cols == 1:
                 source_docs = batch
             elif n_cols == 2:
@@ -91,7 +86,7 @@ def decode_model(args):
             else:
                 raise ValueError("Number of columns found %d not in [1,2]" \
                                   % n_cols)
-                
+                    
             # Output file handle and headers
             create_folder(os.path.dirname(args.decoded_data_path))
             fout = open(args.decoded_data_path, 'w', encoding='utf8')
@@ -101,11 +96,10 @@ def decode_model(args):
             fout.write("\t".join([str(k) for k in range(args.beam_width)]))
             fout.write('\n')
             
-            # Extra stream
-            # @TODO: Remove
-            fout2 = open('.'+args.decoded_data_path.split('.')[-2]+'_CLEAR.csv',
-                         'w', 
-                         encoding='utf8')
+        if write_target:
+            source_docs,target_docs = zip(*batch)
+        else:
+            source_docs = batch
             
         # Get decoded documents: list of lists, with beams as elements
         decoded_docs = model.decode(source_docs)
@@ -116,23 +110,18 @@ def decode_model(args):
             if write_target:
                 fout.write(target_docs[i]+'\t')
             for k in range(args.beam_width):
-                
-                if k == 0:
-                    out_fmt = '[{}] Decode example {} {:>50s} --> {:<50s}'\
-                    .format(str(datetime.now()), i, source_docs[i], decoded_docs[i][k])
-                    fout2.write(out_fmt+'\n')
-                
                 decoded_doc = decoded_docs[i][k]
                 fout.write(decoded_doc+'\t')
+                    
             fout.write('\n')
             
     fout.close()
-    fout2.close()
             
             
 def main():
     args = parser.parse_args()
     decode_model(args)
+    
     
 if __name__=='__main__':
     main()

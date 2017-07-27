@@ -8,14 +8,14 @@ import json
 import numpy as np
 import tensorflow as tf
 
-from unidecode import unidecode
 from keras.preprocessing.sequence import pad_sequences
 from nltk.tokenize import word_tokenize
 from nltk.tokenize.moses import MosesDetokenizer
-from nltk.stem import SnowballStemmer 
+from nltk.stem import SnowballStemmer
+from unidecode import unidecode
 
 from models import Seq2SeqModel
-from utils import create_folder
+from utils import create_folder, get_default_args, update_dict
 from dictionary import load_dict
 
 
@@ -29,10 +29,10 @@ Module level variables:
     DOC_HANDLER_FUNC (str): To process documents with 'doc_to_char_tokens',
         this should be set to 'CHAR'. To process documents with function
         'doc_to_word_tokens', this should be set to 'WORD'. Defaults to 'CHAR'.
-    STEMMER (SnowballStemmer): If DOC_HANDLER_FUNC='CHAR', this stemmer is 
+    STEMMER (SnowballStemmer): If DOC_HANDLER_FUNC='WORD', this stemmer is 
         used for stemming. Must have a 'stem' -method that takes a token as an
         input. With DOC_HANDLER_FUNC='CHAR', this serves no purpose.
-    DETOKENIER (MosesDetokenizer): If DOC_HANDLER_FUNC='CHAR', this is the 
+    DETOKENIER (MosesDetokenizer): If DOC_HANDLER_FUNC='WORD', this is the 
         detokenizer to use for reconstructing documents from tokens. Must have
         a 'detokenize' -method. With DOC_HANDLER_FUNC='CHAR', this has serves
         no purpose.
@@ -89,30 +89,29 @@ def doc_to_char_tokens(doc):
             cleaned_tokens = ['<UNK>']
             return
         
-        # Digits as D -letter
+        # Digits as ?
         if doc.isdigit():
-            cleaned_tokens = ['D']
+            cleaned_tokens = ['?']
             return
         
         # Iterate char by char
         cleaned_tokens = []
         for char in list(doc):
                 
-            # Punctuations (excluding '-' and '#') as P
-            if char in """!"$%&'()*+,./:;<=>?@[\]^_`{|}~""":
-                char = 'P'
+            # Punctuations (excluding '-', '#', '*' and '@') as *
+            if char in """!"$%&'()+,./:;<=>[\]^_`{|}~""":
+                char = '*'
             
-            # Numeric characters as N
+            # Numeric characters as @
             if char.isdigit():
-                char = 'N'
+                char = '@'
             
             # Remove accents
             if char not in ALLOWED_ACCENTS:
                 char = unidecode(char)
                     
             cleaned_tokens.append(char)
-    except Exception as e:
-        print(e)
+    except:
         cleaned_tokens = ['<UNK>']
     finally:   
         return cleaned_tokens
@@ -147,13 +146,49 @@ def doc_to_word_tokens(doc):
     finally:   
         return cleaned_tokens
 
+
+def get_Seq2Seq_model_param_names():
+    """Get wrapper model parameter names.
+    
+    Some of the parameter feeding into models.Seq2SeqModel is done by the
+    wrapper, which is why there are less wrapper parameters than actual
+    parameters that Seq2SeqModel requires. For example, the 'mode',
+    'num_encoder_symbols', 'dropout_rate' and 'beam_width', are fed into
+    from wrapper's 'train' and 'decode' functions.
+    
+    Args:
+        None
+    
+    Returns:
+        List of wrapper parameters.
+    """
+    def_keys = list(get_default_args(Seq2SeqModel.__init__).keys())
+    not_allowed = [
+        # Given as init to wrapper
+        'model_dir', 
+        # Handled by wrapper automatically
+        'mode',
+        'num_encoder_symbols','num_decoder_symbols',
+        'start_token','end_token','pad_token',
+        # Training
+        'dropout_rate','optimizer', 
+        'learning_rate','max_gradient_norm',
+        # Decoding
+        'beam_width','max_decode_step']
+    return [k for k in def_keys if k not in not_allowed]
+
+
 class Seq2Seq(object):
     """Wrapper for Seq2SeqModel.
     
     Args:
-        model_dir (str): 
-        dict_path (str): 
-        **kwargs: 
+        model_dir (str): Model checkpoint save path.
+        dict_path (str): Model dictionary path.
+        **kwargs: Arguments passed to models.Seq2SeqModel constructor.
+        
+    Attributes:
+        wrapper_config (dict): Dictionary of wrapper parameters.
+        model_config (dict): Dictionary of Seq2Seq model parameters.
         
     Examples:
         Create a new model:
@@ -199,6 +234,9 @@ class Seq2Seq(object):
         self.model_config['model_dir'] = self.model_dir
         self.wrapper_config['dict_path'] = self.dict_path
         
+        model_defaults = get_default_args(Seq2SeqModel.__init__)
+        self.model_config = update_dict(model_defaults,self.model_config)
+        
         config = {}
         config['model'] = self.model_config
         config['wrapper'] = self.wrapper_config
@@ -220,8 +258,8 @@ class Seq2Seq(object):
         self.dict_path = config['wrapper']['dict_path']
         self.dictionary = load_dict(self.dict_path)
         
-    def _set_model(self ,mode):
-        """Toggle between 'train' and 'model_decode mode of Seq2Seq."""
+    def _set_model(self,mode):
+        """Toggle between 'train' and 'decode' mode of Seq2Seq."""
         if hasattr(self,'model') and self.model.mode == mode:
             pass
         elif hasattr(self,'model') and not self.model.mode == mode:
@@ -300,6 +338,10 @@ class Seq2Seq(object):
         return docs
         
     def train(self, source_docs, target_docs,
+              dropout_rate=0.2,
+              optimizer='adam',
+              learning_rate=0.0001,
+              max_gradient_norm=1.0,
               max_seq_len=None, 
               save_every_n_batch=1000):
         """Perform a model training step.
@@ -307,6 +349,12 @@ class Seq2Seq(object):
         Args:
             source_docs (list): List of source documents to feed in encoder.
             target_docs (list): List of target documents for decoder.
+            dropout_rate (float): Hidden layer dropout. Defaults to 0.2.
+            optimizer (str): Optimizer to use. Should be in 
+                ['adadelta','adam','rmsprop']. Defaults to 'adam'.
+            learning_rate (float): Learning rate of the optimizer. Defaults
+                to 0.0002.
+            max_gradient_norm (float): Maximum norm to clip gradient.
             max_seq_len (int): Maximum length of a sequence. Defaults to None.
             save_every_n_batch (int): Model checkpoint is saved every n batch.
                 Defaults to 1000.
@@ -314,7 +362,13 @@ class Seq2Seq(object):
         Returns:
             Batch loss and global step of the model.
         """
+        self.model_config['dropout_rate'] = dropout_rate
+        self.model_config['optimizer'] = optimizer
+        self.model_config['learning_rate'] = learning_rate
+        self.model_config['max_gradient_norm'] = max_gradient_norm
+        
         self._set_model('train')
+        
         source_seqs,source_lens = self._docs_to_seqs(source_docs, max_seq_len)
         target_seqs,target_lens = self._docs_to_seqs(target_docs, max_seq_len)
         loss,global_step = self.model.train(source_seqs, source_lens,
@@ -325,6 +379,15 @@ class Seq2Seq(object):
         return loss,global_step
     
     def eval(self, source_docs, target_docs):
+        """Perform a model validation step.
+        
+        Args:
+            source_docs (list): List of source documents to feed in encoder.
+            target_docs (list): List of target documents for decoder.
+            
+        Returns:
+            Batch loss and global step of the model.
+        """
         self._set_model('train')
         source_seqs,source_lens = self._docs_to_seqs(source_docs)
         target_seqs,target_lens = self._docs_to_seqs(target_docs)
@@ -332,16 +395,27 @@ class Seq2Seq(object):
                                            target_seqs, target_lens)
         return loss,global_step
         
-    def decode(self, source_docs):
+    def decode(self, source_docs,
+               beam_width=1,
+               max_decode_step=30):
         """Decode source documents to their target form.
         
         Args:
-            source_docs: List of documents to feed in encoder.
+            source_docs (list): List of documents to feed in encoder.
+            beam_width (int): Number of beams when using beamsearch. When
+                beam_width=1, greedy decoder will be used instead. Defaults
+                to 1.
+            max_decode_step (int): Maximum sequence length when decoding.
+                Defaults to 30.
             
         Returns:
             List of decoded documents.
         """
+        self.model_config['beam_width'] = beam_width
+        self.model_config['max_decode_step'] = max_decode_step
+        
         self._set_model('decode')
+        
         seqs,seq_lens = self._docs_to_seqs(source_docs)
         pred_seqs = self.model.decode(seqs,seq_lens)
         decoded_docs = self._seqs_to_docs(pred_seqs)

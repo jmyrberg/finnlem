@@ -21,15 +21,15 @@ parser.add_argument("--dict-train-path", required=True,
                     help='Dictionary training data folder or file')
 
 # Dictionary params (optional)
-parser.add_argument("--vocab-size", default=100000,
+parser.add_argument("--vocab-size", default=30000,
                     type=int, action='store',
                     help='Size of vocabulary')
 parser.add_argument("--min-freq", default=0.0,
                     type=float, action='store',
-                    help='Minimum word frequency')
+                    help='Minimum token frequency')
 parser.add_argument("--max-freq", default=1.0,
                     type=float, action='store',
-                    help='Maximum word frequency')
+                    help='Maximum token frequency')
 
 # Training params (optional)
 parser.add_argument("--file-batch-size", default=8192,

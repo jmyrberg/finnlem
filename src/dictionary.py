@@ -60,9 +60,9 @@ class Dictionary(object):
     
     Args:
         vocab_size (int): Size of vocabulary, including special tokens
-        min_freq (float): Keep words that exceed this minimum word frequency 
+        min_freq (float): Keep tokens that exceed this minimum token frequency 
             in training data. Float between 0 and 1. Defaults to 0.
-        max_freq (float): Keep words below this maximum word frequency in
+        max_freq (float): Keep tokens below this maximum token frequency in
             training data. Float between 0 and 1. Defaults to 1.
             
     Attributes:
@@ -71,7 +71,7 @@ class Dictionary(object):
         counter (Counter): Dictionary of token counts. For most common tokens,
             use 'Dictionary.counter.most_common()'.
         n_docs (int): Number of documents the Dictionary has been fitted on.
-        n_tokens (int): Number of tokens.
+        n_tokens (int): Number of tokens in Dictionary.
         special_tokens (list): List of special tokens.
         n_special_tokens (int): Number of special tokens.
         SOS: Integer representation for start of sequence token
@@ -127,7 +127,7 @@ class Dictionary(object):
     special_tokens = ['<SOS>','<PAD>','<EOS>','<UNK>']
     path = None
     
-    def __init__(self, vocab_size=100000, min_freq=0.1, max_freq=1.0):
+    def __init__(self, vocab_size=30000, min_freq=0.1, max_freq=1.0):
         self.vocab_size = vocab_size
         self.min_freq = min_freq
         self.max_freq = max_freq
@@ -260,11 +260,12 @@ class Dictionary(object):
         self.lock()
         
     def lock(self):
-        """Lock-in vocabulary to be able to save."""
+        """Lock-in vocabulary to be able to save with batch-fitting."""
         self._remove_extremes()
         self._keep_n(reset_counter=True)
         self._compactify()
         self.locked = True
+        self._print_debug()
         print('Dictionary fitted with %d documents (%d tokens)' % \
               (self.n_docs,self.n_tokens))
         

@@ -19,7 +19,9 @@ SEED = 2018
     
     
 def batchify(it, batch_size=32, shuffle=False, max_batches=None):
-    """Return iterable in batches."""
+    """Return iterable in batches.
+    
+    """
     batch_nb = 0
     batch = []
     for entry in it:
@@ -40,7 +42,7 @@ def batchify(it, batch_size=32, shuffle=False, max_batches=None):
 def rebatch(batches, 
             in_batch_size_limit=8192, 
             out_batch_size=32, 
-            shuffle=True, 
+            shuffle=False, 
             flatten=False):
     """Convert input batches to output batches with different size."""
     # Input
