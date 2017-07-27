@@ -18,7 +18,7 @@ parser = argparse.ArgumentParser('Model decoding')
 parser.add_argument("--model-dir", required=True,
                     type=str, action='store',
                     help='Model checkpoint and log save path')
-parser.add_argument("--source-data-path", required=True,
+parser.add_argument("--test-data-path", required=True,
                     type=str, action='store',
                     help='Path to source data to decode')
 parser.add_argument("--decoded-data-path", required=True,

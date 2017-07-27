@@ -1,20 +1,22 @@
 # -*- coding: utf8 -*-
-'''
-Created on 11.7.2017
+"""Utilities for data processing and batching."""
 
-@author: Jesse
-'''
-from collections import deque
+
 import itertools
 import math
+import time
+
+from collections import deque
 from multiprocessing import cpu_count
 from multiprocessing.pool import Pool
-import time
 
 import numpy as np
 import pandas as pd
 
+
 SEED = 2018
+"""SEED: Seed value for random generators"""
+    
     
 def batchify(it, batch_size=32, shuffle=False, max_batches=None):
     """Return iterable in batches."""
@@ -33,6 +35,7 @@ def batchify(it, batch_size=32, shuffle=False, max_batches=None):
                     break
     if len(batch) > 0:
         yield batch
+    
     
 def rebatch(batches, 
             in_batch_size_limit=8192, 
@@ -73,10 +76,12 @@ def rebatch(batches,
             np.random.shuffle(in_batches)
         yield out_batch
     
+    
 def read_file(filename, nrows=None):
     """Read one file entirely."""
     ar = pd.read_csv(filename, nrows=nrows).values
     return ar
+    
     
 def read_file_batched(filename, 
                       file_batch_size=8192, 
@@ -105,6 +110,7 @@ def read_file_batched(filename,
                 yield batch_df.to_dict('records')
             elif return_mode == 'dict_list':
                 yield batch_df.to_dict('list')
+     
      
 def read_files_batched(filenames,
                        file_batch_size=8192, 
@@ -175,6 +181,7 @@ def read_files_batched(filenames,
                                            return_mode=return_mode,
                                            pd_kwargs=pd_kwargs):
                 yield batch
+        
         
 def read_files_cycled(filenames,
                       max_file_pool_size=8,
