@@ -3,9 +3,12 @@
 
 
 import argparse
+import os
 
-from seq2seq import Seq2Seq
-from utils import get_path_files
+from datetime import datetime
+
+from model_wrappers import Seq2Seq
+from utils import get_path_files, create_folder
 from data_utils import read_files_cycled, rebatch
 
 
@@ -59,52 +62,72 @@ def decode_model(args):
         filenames=files,
         max_file_pool_size=args.max_file_pool_size,
         file_batch_size=args.file_batch_size, 
-        file_batch_shuffle=args.shuffle_file_batches)
+        file_batch_shuffle=False)
     
     # Decode batches
     decode_gen = rebatch(
         file_gen, 
         in_batch_size_limit=args.file_batch_size*args.max_file_pool_size,
         out_batch_size=args.batch_size, 
-        shuffle=args.shuffle_file_batches,
+        shuffle=False,
         flatten=True)
 
     # Decode
     write_target = False
     for batch_nb,batch in enumerate(decode_gen):
         
+        print('Batch number {}'.format(batch_nb))
+        
         if batch_nb == 0:
             
             # Number of columns in batch
             n_cols = len(batch[0])
+            print(n_cols)
             if n_cols == 1:
                 source_docs = batch
             elif n_cols == 2:
-                source_docs,target_docs = batch
+                source_docs,target_docs = zip(*batch)
                 write_target = True
             else:
                 raise ValueError("Number of columns found %d not in [1,2]" \
                                   % n_cols)
                 
             # Output file handle and headers
+            create_folder(os.path.dirname(args.decoded_data_path))
             fout = open(args.decoded_data_path, 'w', encoding='utf8')
             fout.write('source\t')
             if write_target:
                 fout.write('target\t')
-            fout.write("\t".join([str(k) for k in args.beam_width])+'\n')
+            fout.write("\t".join([str(k) for k in range(args.beam_width)]))
+            fout.write('\n')
+            
+            # Extra stream
+            # @TODO: Remove
+            fout2 = open('.'+args.decoded_data_path.split('.')[-2]+'_CLEAR.csv',
+                         'w', 
+                         encoding='utf8')
             
         # Get decoded documents: list of lists, with beams as elements
         decoded_docs = model.decode(source_docs)
         
         # Write beams to file
-        for i in len(decoded_docs):
+        for i in range(len(decoded_docs)):
             fout.write(source_docs[i]+'\t')
             if write_target:
                 fout.write(target_docs[i]+'\t')
-            for k in args.beam_width:
+            for k in range(args.beam_width):
+                
+                if k == 0:
+                    out_fmt = '[{}] Decode example {} {:>50s} --> {:<50s}'\
+                    .format(str(datetime.now()), i, source_docs[i], decoded_docs[i][k])
+                    fout2.write(out_fmt+'\n')
+                
                 decoded_doc = decoded_docs[i][k]
                 fout.write(decoded_doc+'\t')
             fout.write('\n')
+            
+    fout.close()
+    fout2.close()
             
             
 def main():

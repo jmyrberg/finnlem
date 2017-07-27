@@ -30,7 +30,7 @@ from utils import create_folder
 class Seq2SeqModel(object):
 
     def __init__(self, 
-                 model_dir='../data/testFolder/',
+                 model_dir='./',
                  mode='train', 
                  cell_type='lstm', 
                  hidden_dim=256, 
@@ -48,7 +48,7 @@ class Seq2SeqModel(object):
                  end_token=1, 
                  pad_token=0, 
                  optimizer='adam', 
-                 learning_rate=0.00005,
+                 learning_rate=0.0001,
                  max_gradient_norm=1.0,
                  keep_every_n_hours=1,
                  use_beamsearch=False,
@@ -462,18 +462,23 @@ class Seq2SeqModel(object):
 
     def _init_session(self):
         if not hasattr(self,'sess'):
+            create_folder(self.model_dir)
+            self.save_path = os.path.join(self.model_dir,'','model')
+            train_summary_dir = os.path.join(self.model_dir,'train_summary/')
+            valid_summary_dir = os.path.join(self.model_dir,'valid_summary/')
+            create_folder(train_summary_dir)
+            create_folder(valid_summary_dir)
+            
             self.saver = tf.train.Saver(
                 keep_checkpoint_every_n_hours=self.keep_every_n_hours)
             self.sm = tf.train.SessionManager()
             self.init_op = tf.global_variables_initializer()
-            create_folder(self.model_dir)
-            self.save_path = os.path.join(self.model_dir,'','model')
             self.summary_op = tf.summary.merge_all()
             self.sess = self.sm.prepare_session("", init_op=self.init_op,
-                                saver=self.saver, checkpoint_dir=self.model_dir)
-            log_dir = self.model_dir+'/log'
-            create_folder(log_dir)
-            self.summary_writer = tf.summary.FileWriter(log_dir,self.sess.graph)
+                            saver=self.saver, checkpoint_dir=self.model_dir)
+
+            self.train_writer = tf.summary.FileWriter(train_summary_dir,self.sess.graph)
+            self.valid_writer = tf.summary.FileWriter(valid_summary_dir,self.sess.graph)
     
     def _check_feeds(self, encoder_inputs, encoder_inputs_length, 
                     decoder_inputs, decoder_inputs_length, decode):
@@ -504,9 +509,8 @@ class Seq2SeqModel(object):
     
     def train(self, encoder_inputs, encoder_inputs_length, 
               decoder_inputs, decoder_inputs_length):
-        # Session context
-        while True:
-            # Check if the model is 'training' mode
+        while True:# Session context
+
             if self.mode != 'train':
                 raise ValueError("Train step can only be operated in train mode")
     
@@ -520,20 +524,29 @@ class Seq2SeqModel(object):
                            self.loss,
                            self.global_step,
                            self.summary_op]
-            outputs = self.sess.run(output_feed, input_feed)
-            self.summary_writer.add_summary(outputs[3],outputs[2])
-            return outputs[1], outputs[2]
+            _,loss,global_step,summary_op = self.sess.run(output_feed, input_feed)
+            
+            self.train_writer.add_summary(summary_op, global_step)
+            
+            return loss,global_step
 
-    def eval(self, sess, encoder_inputs, encoder_inputs_length,
+    def eval(self, encoder_inputs, encoder_inputs_length,
              decoder_inputs, decoder_inputs_length):
-        input_feed = self.check_feeds(encoder_inputs, encoder_inputs_length,
+        input_feed = self._check_feeds(encoder_inputs, encoder_inputs_length,
                                       decoder_inputs, decoder_inputs_length,
                                       decode=False)
         # Input feeds for dropout
         input_feed[self.keep_prob_placeholder.name] = 1.0
-        output_feed = [self.loss]    # Loss for current batch
-        outputs = sess.run(output_feed, input_feed)
-        return outputs[0]
+        
+        output_feed = [self.loss,
+                       self.global_step,
+                       self.summary_op]
+        
+        loss,global_step,summary_op = self.sess.run(output_feed, input_feed)
+        
+        self.valid_writer.add_summary(summary_op, global_step)
+        
+        return loss,global_step
 
     def decode(self, encoder_inputs, encoder_inputs_length):
         input_feed = self._check_feeds(encoder_inputs, encoder_inputs_length, 
@@ -543,10 +556,12 @@ class Seq2SeqModel(object):
         input_feed[self.keep_prob_placeholder.name] = 1.0
  
         output_feed = [self.decoder_pred_decode]
-        outputs = self.sess.run(output_feed, input_feed)
-        return outputs[0]
+        
+        decoded_seqs, = self.sess.run(output_feed, input_feed)
+        return decoded_seqs
     
     def save(self):
         self.saver.save(self.sess, self.save_path, 
                         global_step=self.global_step,
                         write_meta_graph=False)
+        

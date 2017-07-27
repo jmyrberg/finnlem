@@ -73,6 +73,11 @@ def rebatch(batches,
             np.random.shuffle(in_batches)
         yield out_batch
     
+def read_file(filename, nrows=None):
+    """Read one file entirely."""
+    ar = pd.read_csv(filename, nrows=nrows).values
+    return ar
+    
 def read_file_batched(filename, 
                       file_batch_size=8192, 
                       file_batch_shuffle=False, 

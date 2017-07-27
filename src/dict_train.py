@@ -5,7 +5,7 @@
 import argparse
 
 from dictionary import Dictionary
-from seq2seq import doc_to_tokens
+from model_wrappers import doc_to_tokens
 from utils import get_path_files
 from data_utils import read_files_batched
 
@@ -25,10 +25,10 @@ parser.add_argument("--vocab-size", default=100000,
                     type=int, action='store',
                     help='Size of vocabulary')
 parser.add_argument("--min-freq", default=0.0,
-                    type=int, action='store',
+                    type=float, action='store',
                     help='Minimum word frequency')
 parser.add_argument("--max-freq", default=1.0,
-                    type=int, action='store',
+                    type=float, action='store',
                     help='Maximum word frequency')
 
 # Training params (optional)
@@ -54,12 +54,12 @@ def train_dict(args):
     # Batch generator
     train_gen = read_files_batched(files, 
                                    file_batch_size=args.file_batch_size,
-                                   file_batch_shuffle=False)
+                                   file_batch_shuffle=False,
+                                   return_mode='array')
     
     # Fit dictionary in batches
     for docs in train_gen:
-        long_doc = " ".join(docs.flatten())
-        tokens = [[token] for token in doc_to_tokens(long_doc)]
+        tokens = [doc_to_tokens(doc) for doc in docs.flatten()]
         model_dict.fit_batch(tokens, prune_every_n=args.prune_every_n)
     
     # Save dict
