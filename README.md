@@ -4,12 +4,12 @@
 
 A trained neural network can map given Finnish words into their base form with quite reasonable accuracy. These are examples of the model output:
 ```
-[ORIGINAL]					   [BASE FORM]
-Kiinalaisessa				--> kiinalainen
-osinkotulojen				-->	osinko#tulo	
-Rajoittavalla				-->	rajoittaa
-multimediaopetusmateriaalia	-->	multi#media#opetus#materiaali
-ei-rasistisella				--> ei-rasistinen
+[ORIGINAL] --> [BASE FORM]
+Kiinalaisessa --> kiinalainen
+osinkotulojen --> osinko#tulo	
+Rajoittavalla --> rajoittaa
+multimediaopetusmateriaalia -->	multi#media#opetus#materiaali
+ei-rasistisella	--> ei-rasistinen
 ```
 The model is a [tensorflow](https://www.tensorflow.org) implementation of a [sequence-to-sequence](https://arxiv.org/abs/1406.1078) (Seq2Seq) recurrent neural network model. 
 This repository contains the code and data needed for training and making predictions with the model. The [datasets](src/data/datasets) contain over 2M samples in total.
@@ -34,14 +34,14 @@ After this, clone this repository to your local machine.
 
 ## Example usage
 
-Three-steps are required in order to make predictions with a trained model:
+Three-steps are required in order to get from zero to making predictions with a trained model:
 
 1. **Dictionary training**: Dictionary is created from training documents, which are processed the same way as the Seq2Seq model inputs later on.
 	Dictionary handles vocabulary/integer mappings required by Seq2Seq.
 2. **Model training**: Seq2Seq model is trained in batches with training documents that contain source and target.
 3. **Model decoding**: Unseen source documents are fed into Seq2Seq model, which makes predictions on the target.
 
-### Python ([See list of available methods here](src/python_api.md))
+### Python ([See list of relevant Python API classes](doc/python_api.md))
 
 The following is a simple example of using some of the features in the Python API.
 See more detailed descriptions of functions and parameters available from the source code documentation.
@@ -69,11 +69,11 @@ from model_wrappers import Seq2Seq
 
 # Create a new model
 model = Seq2Seq(model_dir='./data/models/lemmatizer,
-				dict_path='./data/dictionaries/lemmatizer.dict'))
+				dict_path='./data/dictionaries/lemmatizer.dict')
 
 # Create some documents to train on
 source_docs = ['koira','koiran','koiraa','koirana','koiraksi','koirassa']*128
-target_docs = ['koira','koira','koira','koira','koira','koira','koira']*128
+target_docs = ['koira','koira','koira','koira','koira','koira']*128
 
 # Train 100 batches, save checkpoint every 25th batch
 for i in range(100):
@@ -89,9 +89,9 @@ print(pred_docs) # --> [['koira'],['koira'],['koira']]
 ```
 
 
-### Command line ([See list of available commands here](src/commands.md))
+### Command line ([See list of available commands here](doc/commands.md))
 
-The following is a bit more complicated example of using the command line to train and predict from files.
+The following demonstrates the usage of command line for training and predicting from files.
 
 #### 1. Dictionary training - fit a dictionary with default parameters
 ```
@@ -125,15 +125,16 @@ The model test data path file(s) should contain either:
 ## Extensions
 * To use tensorboard, run command ```python -m tensorflow.tensorboard --logdir=model_dir```, 
 where ```model_dir``` is the Seq2Seq model checkpoint folder.
-* The model was originally created for summarizing Finnish news, by using news contents as the sources, and news titles as the targets.
+* The model was originally created for summarizing the Finnish news, by using news contents as the sources, and news titles as the targets.
 This proved to be quite a difficult task due to rich morphology of Finnish language, and lack of computational resources. My first
-approach to tackle this was to use the base forms for each word, which is what this package can do. In the end, using this model to convert
-every word to their base form would've taken too long.
+approach for tackling the morphology was to use the base forms for each word, which is what the model in this package does by default. However, 
+using this model to convert every word to their base form ended up being too slow to be used as an input for the second model in real time.
 
-	In the end, I decided to use the [Finnish SnowballStemmer from nltk](http://www.nltk.org/_modules/nltk/stem/snowball.html), and train
-	the model with 100k vocabulary. After 36 hours of training with loss decreasing very slowly, I decided to keep this package as the character-level.
+	In the end, I decided to try the [Finnish SnowballStemmer from nltk](http://www.nltk.org/_modules/nltk/stem/snowball.html) in order to get the "base words", 
+	and started training the model with 100k vocabulary. After 36 hours of training with loss decreasing very slowly, I decided to stop, and keep this package as a character-level lemmatizer.
 	However, in [model_wrappers.py](src/model_wrappers.py), there is a global variable *DOC_HANDLER_FUNC*, which enables one to change the preprocessing method easily from
-	characters to words by setting ```DOC_HANDLER_FUNC='WORD'```.
+	characters to words by setting ```DOC_HANDLER_FUNC='WORD'```. Try changing the variable, and/or write your own preprocessing function *doc_to_tokens*, if you'd like to 
+	experiment with the word-level model.
 
 
 ## Acknowledgements and references
@@ -142,4 +143,5 @@ every word to their base form would've taken too long.
 * [FinnTreeBank](http://www.ling.helsinki.fi/kieliteknologia/tutkimus/treebank/): Source for datasets
 * [Finnish Dependency Parser](http://bionlp.utu.fi/finnish-parser.html): Source for datasets
 		
-		
+---
+Jesse Myrberg (jesse.myrberg@gmail.com)

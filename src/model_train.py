@@ -38,17 +38,17 @@ parser.add_argument("--validation-data-path", default=None,
 parser.add_argument("--cell-type", default='lstm',
                     type=str, action='store',
                     help="Cell type, either 'gru' or 'lstm'")
-parser.add_argument("--hidden-dim", default=256,
+parser.add_argument("--hidden-dim", default=32,
                     type=int, action='store',
                     help='Number of neurons in hidden layers')
 parser.add_argument("--attn-dim", default=None,
                     type=int, action='store',
                     help='Number of neurons in to use in attention.'
                          'None means attn-dim = hidden-dim')
-parser.add_argument("--embedding-dim", default=128,
+parser.add_argument("--embedding-dim", default=16,
                     type=int, action='store',
                     help='Embedding dimension')
-parser.add_argument("--depth", default=2,
+parser.add_argument("--depth", default=1,
                     type=int, action='store',
                     help='Number of hidden layers in encoder and decoder')
 parser.add_argument("--attn-type", default='bahdanau',

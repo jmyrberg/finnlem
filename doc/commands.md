@@ -1,4 +1,4 @@
-# List of available command line parameters
+# List of available commands
 
 ## Step 1: Dictionary training
 Required:
@@ -26,9 +26,9 @@ Required when creating the model for the first time:
 ### Model params
 Optional, locked in when creating the model for the first time:
 * ```--cell-type```: Cell type, either 'gru' or 'lstm' (str, default: 'lstm
-* ```--hidden-dim```: Number of neurons in hidden layers (int, default: 256)
+* ```--hidden-dim```: Number of neurons in hidden layers (int, default: 32)
 * ```--attn-dim```: Number of neurons in to use in attention. None means attn-dim = hidden-dim (int, default: None)
-* ```--embedding-dim```: Embedding dimension (int, default: 128)
+* ```--embedding-dim```: Embedding dimension (int, default: 16)
 * ```--depth```: Number of hidden layers in encoder and decoder (int, default: 2)
 * ```--attn-type```: Attention type, either 'bahdanau' or 'luong' (str, default: 'bahdanau
 * ```--attn-input-feeding```: Whether attention is fed to decoder inputs (bool, default: True)

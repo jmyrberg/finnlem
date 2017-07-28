@@ -34,9 +34,9 @@ Args:
 * ```model_dir```: Model checkpoint and log save path (str)
 * ```dict_path```: Path to existing Dictionary (str, default: None)
 * ```cell_type```: Cell type, either 'gru' or 'lstm' (str, default: 'lstm
-* ```hidden_dim```: Number of neurons in hidden layers (int, default: 256)
+* ```hidden_dim```: Number of neurons in hidden layers (int, default: 32)
 * ```attn_dim```: Number of neurons in to use in attention. None means attn_dim = hidden_dim (int, default: None)
-* ```embedding_dim```: Embedding dimension (int, default: 128)
+* ```embedding_dim```: Embedding dimension (int, default: 16)
 * ```depth```: Number of hidden layers in encoder and decoder (int, default: 2)
 * ```attn_type```: Attention type, either 'bahdanau' or 'luong' (str, default: 'bahdanau
 * ```attn_input_feeding```: Whether attention is fed to decoder inputs (bool, default: True)

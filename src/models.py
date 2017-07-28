@@ -32,10 +32,10 @@ class Seq2SeqModel(object):
                  model_dir='./',
                  mode='train', 
                  cell_type='lstm', 
-                 hidden_dim=256,
+                 hidden_dim=32,
                  attn_dim=None,
-                 embedding_dim=128, 
-                 depth=2, 
+                 embedding_dim=16, 
+                 depth=1, 
                  attn_type='bahdanau', 
                  attn_input_feeding=True,
                  use_residual=False, 
@@ -103,12 +103,13 @@ class Seq2SeqModel(object):
         self._build_encoder()
         self._build_decoder()
         self._init_session()
+        self.n_params = np.sum([np.prod(v.get_shape().as_list()) 
+                                for v in tf.trainable_variables()])
 
     def _init_attributes(self):
         self.use_dropout = True if self.dropout_rate == 0.0 else False
         self.keep_prob = 1.0 - self.dropout_rate
-        self.n_params = np.sum([np.prod(v.get_shape().as_list()) 
-                                for v in tf.trainable_variables()])
+        
 
     def _init_placeholders(self):
         
