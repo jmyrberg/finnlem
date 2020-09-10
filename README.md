@@ -29,8 +29,11 @@ You should have the latest versions for (as of 7/2017):
 * pandas
 * tensorflow (1.3.0 or greater, with CUDA 8.0 and cuDNN 6.0 or greater)
 * unidecode
+* sacremoses ([see issue regarding this](https://github.com/jmyrberg/finnlem/issues/1))
 
 After this, clone this repository to your local machine.
+
+Update 10.9.2020: You could also try to first clone and then run `pip install -r requirements.txt` at the root of this repository. This will install the latest versions of the required packages automatically, but notice that the very latest versions of some of the packages might nowadays be incompatible with the source code provided here. Feel free to make a pull request with fixed versions of the packages, in case you manage to run the source code successfully :)
 
 ## Example usage
 

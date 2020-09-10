@@ -1,0 +1,7 @@
+keras
+nltk
+numpy
+pandas
+tensorflow
+unidecode
+sacremoses
